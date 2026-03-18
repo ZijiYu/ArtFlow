@@ -20,7 +20,7 @@ class VLMRunner:
     ) -> tuple[str, dict[str, Any]]:
         user_prompt = (
             f"图像路径: {image_path}\n"
-            "请基于该图像进行国画鉴赏。若无法直接读取图像，请明确说明并仅依据给定上下文谨慎分析。\n\n"
+            "请基于该图像进行国画鉴赏。默认你已接收到图像，请直接依据图像内容分析；仅当请求中确实没有图像时，才说明无法读取并谨慎给出结论。\n\n"
             f"任务提示: {prompt}"
         )
         result = self.api_client.chat(

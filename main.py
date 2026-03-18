@@ -23,6 +23,12 @@ def _parse_meta(raw: str | None) -> dict:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="TCP 国画鉴赏 prompt v1 pipeline")
+    parser.add_argument(
+        "--mode",
+        default="slot",
+        choices=["slot", "solitary", "communal"],
+        help="运行模式：slot / solitary / communal",
+    )
     parser.add_argument("--image", required=True, help="图像路径或图像标识")
     parser.add_argument(
         "--meta",
@@ -36,6 +42,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--agent-temperature", type=float, default=0.7, help="agent生成温度")
     parser.add_argument("--vlm-temperature", type=float, default=0.2, help="VLM鉴赏温度")
+    parser.add_argument("--solitary-model", default="", help="solitary模式模型名称，三轮复用同一模型")
+    parser.add_argument("--solitary-rounds", type=int, default=3, help="solitary模式反思轮数，最少1轮，默认3")
+    parser.add_argument("--guest-num", type=int, default=3, help="communal模式客人数量，默认3")
+    parser.add_argument("--guest-model", default="", help="communal模式客人模型名称，留空则用NEW_API_MODEL")
     parser.add_argument("--agent-model", default="", help="slot小模型名称，留空则用NEW_API_MODEL")
     parser.add_argument("--baseline-model", default="", help="baseline鉴赏模型名称，留空则用NEW_API_MODEL")
     parser.add_argument("--enhanced-model", default="", help="enhanced鉴赏模型名称，留空则用NEW_API_MODEL")
@@ -53,9 +63,14 @@ def main() -> None:
 
     pipeline = TcpPromptPipeline(
         config=PipelineConfig(
+            mode=args.mode,
             slots=slots,
             agent_temperature=args.agent_temperature,
             vlm_temperature=args.vlm_temperature,
+            solitary_model=args.solitary_model or None,
+            solitary_rounds=max(1, args.solitary_rounds),
+            guest_num=max(1, args.guest_num),
+            guest_model=args.guest_model or None,
             agent_model=args.agent_model or None,
             baseline_model=args.baseline_model or None,
             enhanced_model=args.enhanced_model or None,
