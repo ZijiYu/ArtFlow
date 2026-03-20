@@ -26,8 +26,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--mode",
         default="slot",
-        choices=["slot", "solitary", "communal"],
-        help="运行模式：slot / solitary / communal",
+        choices=["slot", "solitary", "communal", "slot_pipe"],
+        help="运行模式：slot / solitary / communal / slot_pipe",
     )
     parser.add_argument("--image", required=True, help="图像路径或图像标识")
     parser.add_argument(
@@ -46,9 +46,32 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--solitary-rounds", type=int, default=3, help="solitary模式反思轮数，最少1轮，默认3")
     parser.add_argument("--guest-num", type=int, default=3, help="communal模式客人数量，默认3")
     parser.add_argument("--guest-model", default="", help="communal模式客人模型名称，留空则用NEW_API_MODEL")
+    parser.add_argument("--judge-model", default="", help="judge模型名称，供slot_pipe与其他需要裁决的流程使用")
+    parser.add_argument(
+        "--slot-pipe-agents-per-slot",
+        type=int,
+        default=2,
+        help="slot_pipe模式每个slot并行agent数量，默认2",
+    )
+    parser.add_argument(
+        "--slot-pipe-max-retries",
+        type=int,
+        default=3,
+        help="slot_pipe模式每个slot最多返工轮数，默认3",
+    )
     parser.add_argument("--agent-model", default="", help="slot小模型名称，留空则用NEW_API_MODEL")
+    parser.add_argument(
+        "--embedding-model",
+        default="",
+        help="slot_pipe降重embedding模型名称（通过chat/completions调用），留空则回退默认模型",
+    )
     parser.add_argument("--baseline-model", default="", help="baseline鉴赏模型名称，留空则用NEW_API_MODEL")
     parser.add_argument("--enhanced-model", default="", help="enhanced鉴赏模型名称，留空则用NEW_API_MODEL")
+    parser.add_argument(
+        "--final-appreciation-model",
+        default="",
+        help="slot_pipe最终鉴赏模型名称（使用最终补充prompt+图像），留空则回退enhanced/baseline模型",
+    )
     parser.add_argument("--api-timeout", type=int, default=60, help="单次API请求超时秒数，默认60")
     parser.add_argument("--output-dir", default="outputs", help="结果输出目录")
     return parser
@@ -71,9 +94,14 @@ def main() -> None:
             solitary_rounds=max(1, args.solitary_rounds),
             guest_num=max(1, args.guest_num),
             guest_model=args.guest_model or None,
+            judge_model=args.judge_model or None,
+            slot_pipe_agents_per_slot=max(1, args.slot_pipe_agents_per_slot),
+            slot_pipe_max_retries=max(0, args.slot_pipe_max_retries),
             agent_model=args.agent_model or None,
+            embedding_model=args.embedding_model or None,
             baseline_model=args.baseline_model or None,
             enhanced_model=args.enhanced_model or None,
+            final_appreciation_model=args.final_appreciation_model or None,
         ),
         api_client=api_client,
     )
@@ -85,6 +113,17 @@ def main() -> None:
     print(f"Token Usage: {result.token_usage}")
     failed_calls = [x for x in result.api_logs if not x.get("ok")]
     print(f"API Calls: {len(result.api_logs)}, Failed: {len(failed_calls)}")
+    if result.mode == "slot_pipe":
+        embedding_logs = [x for x in result.api_logs if x.get("stage") == "slot_pipe_embedding"]
+        if embedding_logs:
+            total = len(embedding_logs)
+            api_ok = sum(1 for x in embedding_logs if bool(x.get("ok")))
+            parse_ok = sum(1 for x in embedding_logs if bool(x.get("embedding_parse_ok")))
+            fallback = sum(1 for x in embedding_logs if bool(x.get("fallback_used")))
+            print(
+                "Embedding Summary: "
+                f"total={total}, api_ok={api_ok}, parse_ok={parse_ok}, fallback={fallback}"
+            )
     for item in failed_calls[:5]:
         stage = item.get("stage", "unknown")
         slot = item.get("slot")
