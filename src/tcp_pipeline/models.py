@@ -21,6 +21,7 @@ class PipelineResult:
     enhanced_analysis: str
     solitary_rounds: list[dict[str, str]]
     communal_rounds: list[dict[str, str]]
+    slot_pipe_layers: list[dict[str, Any]]
     token_usage: dict[str, int]
     api_logs: list[dict[str, Any]]
     logs: list[dict[str, Any]]

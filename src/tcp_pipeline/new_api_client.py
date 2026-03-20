@@ -45,6 +45,13 @@ class NewAPIClient:
             except ValueError:
                 pass
 
+    def _request_headers(self) -> dict[str, str]:
+        return {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+        }
+
     @property
     def enabled(self) -> bool:
         return bool(self.api_key and self.base_url)
@@ -56,6 +63,17 @@ class NewAPIClient:
         if self.base_url.endswith("/chat/completions"):
             return self.base_url
         return f"{self.base_url}/chat/completions"
+
+    def _embeddings_endpoint(self) -> str:
+        # Supports both forms:
+        # 1) base_url=https://host/v1  -> /embeddings appended
+        # 2) base_url=https://host/v1/embeddings -> used directly
+        # 3) base_url=https://host/v1/chat/completions -> replaced with /embeddings
+        if self.base_url.endswith("/embeddings"):
+            return self.base_url
+        if self.base_url.endswith("/chat/completions"):
+            return self.base_url[: -len("/chat/completions")] + "/embeddings"
+        return f"{self.base_url}/embeddings"
 
     @staticmethod
     def _extract_content(parsed: dict[str, Any]) -> str | None:
@@ -194,11 +212,7 @@ class NewAPIClient:
         req = urllib.request.Request(
             url=self._endpoint(),
             data=body,
-            headers={
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-                "Authorization": f"Bearer {self.api_key}",
-            },
+            headers=self._request_headers(),
             method="POST",
         )
         try:
@@ -303,3 +317,155 @@ class NewAPIClient:
                 request_summary=request_summary,
                 response_summary={"error": f"json_decode_error: {exc}"},
             )
+
+    def embeddings(self, inputs: list[str], model: str | None = None) -> dict[str, Any]:
+        clean_inputs = [str(x) for x in inputs if str(x).strip()]
+        model_used = model or self.model or ""
+        request_summary = {
+            "model": model_used,
+            "input_size": len(clean_inputs),
+        }
+
+        if not clean_inputs:
+            return {
+                "ok": True,
+                "vectors": [],
+                "model": model_used,
+                "error": None,
+                "endpoint": self._embeddings_endpoint() if self.base_url else "",
+                "status_code": None,
+                "prompt_tokens": 0,
+                "total_tokens": 0,
+                "request_summary": request_summary,
+                "response_summary": {"note": "empty_input"},
+            }
+
+        if not self.enabled:
+            return {
+                "ok": False,
+                "vectors": [],
+                "model": model_used,
+                "error": "api_not_enabled: missing NEW_API_KEY or NEW_API_BASE_URL",
+                "endpoint": self._embeddings_endpoint() if self.base_url else "",
+                "status_code": None,
+                "prompt_tokens": 0,
+                "total_tokens": 0,
+                "request_summary": request_summary,
+                "response_summary": {"error": "api_not_enabled"},
+            }
+
+        payload = {
+            "model": model_used,
+            "input": clean_inputs,
+            "encoding_format": "float",
+        }
+        body = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            url=self._embeddings_endpoint(),
+            data=body,
+            headers=self._request_headers(),
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                raw = resp.read().decode("utf-8")
+                status_code = getattr(resp, "status", None)
+            parsed = json.loads(raw)
+
+            data = parsed.get("data", []) if isinstance(parsed, dict) else []
+            vectors: list[list[float]] = []
+            if isinstance(data, list):
+                for item in data:
+                    if not isinstance(item, dict):
+                        vectors.append([])
+                        continue
+                    emb = item.get("embedding")
+                    if not isinstance(emb, list):
+                        vectors.append([])
+                        continue
+                    vec: list[float] = []
+                    for x in emb:
+                        try:
+                            vec.append(float(x))
+                        except Exception:
+                            continue
+                    vectors.append(vec)
+
+            usage = parsed.get("usage", {}) if isinstance(parsed, dict) else {}
+            prompt_tokens = int(usage.get("prompt_tokens", 0) or 0) if isinstance(usage, dict) else 0
+            total_tokens = int(usage.get("total_tokens", 0) or 0) if isinstance(usage, dict) else prompt_tokens
+
+            ok = len(vectors) == len(clean_inputs) and all(len(v) > 0 for v in vectors)
+            return {
+                "ok": ok,
+                "vectors": vectors,
+                "model": model_used,
+                "error": None if ok else "embedding_response_incomplete",
+                "endpoint": self._embeddings_endpoint(),
+                "status_code": status_code,
+                "prompt_tokens": prompt_tokens,
+                "total_tokens": total_tokens,
+                "request_summary": request_summary,
+                "response_summary": {
+                    "vector_count": len(vectors),
+                    "input_size": len(clean_inputs),
+                },
+            }
+        except urllib.error.HTTPError as exc:
+            err_body = ""
+            try:
+                err_body = exc.read().decode("utf-8", errors="replace")
+            except Exception:
+                err_body = ""
+            reason = f"http_error {exc.code}: {err_body[:300]}".strip()
+            return {
+                "ok": False,
+                "vectors": [],
+                "model": model_used,
+                "error": reason,
+                "endpoint": self._embeddings_endpoint(),
+                "status_code": exc.code,
+                "prompt_tokens": 0,
+                "total_tokens": 0,
+                "request_summary": request_summary,
+                "response_summary": {"error_body_preview": self._brief(err_body)},
+            }
+        except urllib.error.URLError as exc:
+            return {
+                "ok": False,
+                "vectors": [],
+                "model": model_used,
+                "error": f"url_error: {exc.reason}",
+                "endpoint": self._embeddings_endpoint(),
+                "status_code": None,
+                "prompt_tokens": 0,
+                "total_tokens": 0,
+                "request_summary": request_summary,
+                "response_summary": {"error": f"url_error: {exc.reason}"},
+            }
+        except (TimeoutError, socket.timeout):
+            return {
+                "ok": False,
+                "vectors": [],
+                "model": model_used,
+                "error": f"timeout_error: exceeded {self.timeout}s",
+                "endpoint": self._embeddings_endpoint(),
+                "status_code": None,
+                "prompt_tokens": 0,
+                "total_tokens": 0,
+                "request_summary": request_summary,
+                "response_summary": {"error": f"timeout_error: exceeded {self.timeout}s"},
+            }
+        except json.JSONDecodeError as exc:
+            return {
+                "ok": False,
+                "vectors": [],
+                "model": model_used,
+                "error": f"json_decode_error: {exc}",
+                "endpoint": self._embeddings_endpoint(),
+                "status_code": None,
+                "prompt_tokens": 0,
+                "total_tokens": 0,
+                "request_summary": request_summary,
+                "response_summary": {"error": f"json_decode_error: {exc}"},
+            }

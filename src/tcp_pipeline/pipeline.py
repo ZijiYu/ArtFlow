@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 import json
+import math
+import os
+import re
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -13,10 +18,14 @@ from .prompt_builder import (
     build_communal_guest1_prompt,
     build_communal_guest_next_prompt,
     build_enhanced_prompt,
+    build_slot_pipe_agent_prompt,
+    build_slot_pipe_final_prompt,
+    build_slot_pipe_layer_judge_prompt,
+    build_slot_pipe_slot_judge_prompt,
     build_solitary_first_prompt,
     build_solitary_reflection_prompt,
 )
-from .slots import normalize_slots
+from .slots import normalize_slots, slot_label
 from .token_tracker import TokenTracker
 from .vlm_runner import VLMRunner
 
@@ -31,9 +40,14 @@ class PipelineConfig:
     solitary_rounds: int = 3
     guest_num: int = 3
     guest_model: str | None = None
+    judge_model: str | None = None
+    slot_pipe_agents_per_slot: int = 2
+    slot_pipe_max_retries: int = 3
     agent_model: str | None = None
+    embedding_model: str | None = None
     baseline_model: str | None = None
     enhanced_model: str | None = None
+    final_appreciation_model: str | None = None
 
 
 class TcpPromptPipeline:
@@ -43,6 +57,9 @@ class TcpPromptPipeline:
         self.config = config or PipelineConfig()
         self.api_client = api_client or NewAPIClient()
         self.tracker = TokenTracker()
+        self._tracker_lock = threading.Lock()
+        self._embedding_logs_lock = threading.Lock()
+        self._embedding_api_logs: list[dict] = []
         self.agent_runner = SlotAgentRunner(
             self.api_client,
             temperature=self.config.agent_temperature,
@@ -56,6 +73,8 @@ class TcpPromptPipeline:
             return self._run_solitary(image_path=image_path, meta=meta)
         if mode == "communal":
             return self._run_communal(image_path=image_path, meta=meta)
+        if mode == "slot_pipe":
+            return self._run_slot_pipe(image_path=image_path, meta=meta)
         return self._run_slot(image_path=image_path, meta=meta)
 
     def _run_slot(self, image_path: str, meta: dict | None = None) -> PipelineResult:
@@ -125,6 +144,7 @@ class TcpPromptPipeline:
             enhanced_analysis=enhanced_analysis,
             solitary_rounds=[],
             communal_rounds=[],
+            slot_pipe_layers=[],
             token_usage=self.tracker.snapshot(),
             api_logs=api_logs,
             logs=logs,
@@ -189,6 +209,7 @@ class TcpPromptPipeline:
             enhanced_analysis=final_analysis,
             solitary_rounds=solitary_rounds,
             communal_rounds=[],
+            slot_pipe_layers=[],
             token_usage=self.tracker.snapshot(),
             api_logs=api_logs,
             logs=logs,
@@ -287,10 +308,1416 @@ class TcpPromptPipeline:
             enhanced_analysis=final_analysis,
             solitary_rounds=[],
             communal_rounds=communal_rounds,
+            slot_pipe_layers=[],
             token_usage=self.tracker.snapshot(),
             api_logs=api_logs,
             logs=logs,
         )
+
+    def _run_slot_pipe(self, image_path: str, meta: dict | None = None) -> PipelineResult:
+        meta = meta or {}
+        self._reset_embedding_api_logs()
+        selected_slots = [slot_label(slot) for slot in normalize_slots(self.config.slots)]
+        agents_per_slot = max(1, int(self.config.slot_pipe_agents_per_slot or 1))
+        max_retries = max(0, int(self.config.slot_pipe_max_retries or 0))
+        judge_model = self.config.judge_model or self.config.enhanced_model or self.config.baseline_model
+        final_appreciation_model = (
+            self.config.final_appreciation_model
+            or self.config.enhanced_model
+            or self.config.baseline_model
+        )
+
+        layers = [
+            (1, "要素整理", "提炼该slot在图像中的视觉要素与证据。"),
+            (2, "内容要点", "整理可用于最终鉴赏写作的内容要点与论述方向。"),
+            (3, "专业表达", "将要点提升为更专业、准确、可落地的鉴赏表达建议。"),
+        ]
+
+        api_logs: list[dict] = []
+        logs: list[dict] = []
+        slot_pipe_layers: list[dict] = []
+
+        current_slots = list(selected_slots)
+        previous_layer_points: dict[str, list[dict]] = {}
+        slot_timeline: list[dict] = []
+
+        for layer_index, layer_name, layer_goal in layers:
+            layer_record: dict = {
+                "layer_index": layer_index,
+                "layer_name": layer_name,
+                "layer_goal": layer_goal,
+                "slots_before": list(current_slots),
+                "slots": [],
+            }
+            slot_timeline.append(
+                {
+                    "layer_index": layer_index,
+                    "layer_name": layer_name,
+                    "slots": list(current_slots),
+                }
+            )
+
+            slot_states: dict[str, dict] = {
+                slot: {
+                    "latest_text_by_agent": {},
+                    "agent_attempts": [],
+                    "judge_rounds": [],
+                }
+                for slot in current_slots
+            }
+
+            initial_tasks: list[dict] = []
+            for slot in current_slots:
+                for agent_index in range(1, agents_per_slot + 1):
+                    initial_tasks.append(
+                        {
+                            "slot": slot,
+                            "agent_index": agent_index,
+                            "attempt_index": 1,
+                            "feedback": "",
+                        }
+                    )
+
+            initial_logs = self._run_slot_pipe_agent_tasks(
+                image_path=image_path,
+                meta=meta,
+                layer_index=layer_index,
+                layer_name=layer_name,
+                layer_goal=layer_goal,
+                previous_layer_points=previous_layer_points,
+                tasks=initial_tasks,
+                slot_states=slot_states,
+            )
+            api_logs.extend(initial_logs)
+
+            layer_judge_rounds: list[dict] = []
+            last_layer_judge_result: dict = {
+                "layer_ok": True,
+                "summary": "default_no_judge",
+                "slot_updates": [],
+                "next_slots": current_slots,
+                "slot_decisions": [],
+                "retry_tasks": [],
+            }
+            last_layer_judge_log: dict = {}
+
+            retry_round = 0
+            while True:
+                slot_point_map_for_judge = {
+                    slot: self._pool_slot_points(slot_states[slot]["latest_text_by_agent"])
+                    for slot in current_slots
+                }
+                slot_global_payload = {
+                    slot: {
+                        "pooled_points": slot_point_map_for_judge.get(slot, []),
+                        "latest_agent_outputs": [
+                            {"agent_index": idx, "text": text}
+                            for idx, text in sorted(slot_states[slot]["latest_text_by_agent"].items())
+                        ],
+                        "agent_attempts": slot_states[slot]["agent_attempts"],
+                    }
+                    for slot in current_slots
+                }
+
+                layer_judge_result, layer_judge_log = self._run_slot_pipe_layer_judge(
+                    image_path=image_path,
+                    layer_index=layer_index,
+                    layer_name=layer_name,
+                    layer_goal=layer_goal,
+                    current_slots=current_slots,
+                    slot_global_payload=slot_global_payload,
+                    max_retry=max_retries,
+                    retry_round=retry_round,
+                    judge_model=judge_model,
+                )
+                layer_judge_rounds.append(layer_judge_log)
+                api_logs.append(layer_judge_log)
+                last_layer_judge_result = layer_judge_result
+                last_layer_judge_log = layer_judge_log
+
+                slot_decisions = layer_judge_result.get("slot_decisions")
+                if isinstance(slot_decisions, list):
+                    decision_map = {
+                        str(item.get("slot", "")).strip(): item
+                        for item in slot_decisions
+                        if isinstance(item, dict) and str(item.get("slot", "")).strip()
+                    }
+                    for slot in current_slots:
+                        if slot in decision_map:
+                            slot_states[slot]["judge_rounds"].append(decision_map[slot])
+
+                retry_tasks = self._normalize_retry_tasks(
+                    layer_judge_result.get("retry_tasks"),
+                    current_slots=current_slots,
+                    max_agent=agents_per_slot,
+                )
+                layer_ok = bool(layer_judge_result.get("layer_ok", True))
+
+                if layer_ok or not retry_tasks or retry_round >= max_retries:
+                    break
+
+                for task in retry_tasks:
+                    slot = str(task.get("slot", "")).strip()
+                    agent_index = int(task.get("agent_index", 0) or 0)
+                    task["attempt_index"] = self._count_agent_attempts(
+                        slot_states.get(slot, {}).get("agent_attempts", []),
+                        agent_index,
+                    ) + 1
+
+                retry_round += 1
+                retry_logs = self._run_slot_pipe_agent_tasks(
+                    image_path=image_path,
+                    meta=meta,
+                    layer_index=layer_index,
+                    layer_name=layer_name,
+                    layer_goal=layer_goal,
+                    previous_layer_points=previous_layer_points,
+                    tasks=retry_tasks,
+                    slot_states=slot_states,
+                )
+                api_logs.extend(retry_logs)
+
+            slot_points_for_layer: dict[str, list[dict]] = {
+                slot: self._pool_slot_points(slot_states[slot]["latest_text_by_agent"])
+                for slot in current_slots
+            }
+
+            for slot in current_slots:
+                layer_record["slots"].append(
+                    {
+                        "slot": slot,
+                        "agent_attempts": slot_states[slot]["agent_attempts"],
+                        "judge_rounds": slot_states[slot]["judge_rounds"],
+                        "final_points": slot_points_for_layer.get(slot, []),
+                        "latest_agent_outputs": [
+                            {"agent_index": idx, "text": text}
+                            for idx, text in sorted(slot_states[slot]["latest_text_by_agent"].items())
+                        ],
+                    }
+                )
+
+            layer_record["layer_judge"] = last_layer_judge_log
+            layer_record["layer_judge_rounds"] = layer_judge_rounds
+
+            next_slots = self._normalize_slot_list(
+                last_layer_judge_result.get("next_slots"),
+                require_cn_theory=True,
+                avoid_overlap_with=current_slots,
+            )
+            next_slots = self._stabilize_next_slots(current_slots, next_slots)
+
+            layer_record["slots_after"] = list(next_slots)
+            layer_record["slot_updates"] = last_layer_judge_result.get("slot_updates") or []
+
+            current_slots = next_slots
+            previous_layer_points = self._remap_slot_points_by_updates(
+                slot_points_for_layer,
+                last_layer_judge_result.get("slot_updates") or [],
+                fallback_slots=current_slots,
+            )
+            slot_pipe_layers.append(layer_record)
+
+        final_prompt = build_slot_pipe_final_prompt(slot_pipe_layers)
+        self._track_text("slot_pipe_final_appreciation_prompt", final_prompt)
+        final_analysis, final_appreciation_log = self.vlm_runner.analyze(
+            image_path=image_path,
+            prompt=final_prompt,
+            temperature=self.config.vlm_temperature,
+            model=final_appreciation_model,
+            inference_kind="slot_pipe_final_appreciation",
+        )
+        api_logs.append(final_appreciation_log)
+        self._track_text("slot_pipe_final_appreciation_analysis", final_analysis)
+        self._track_api_usage("slot_pipe_final_appreciation", int(final_appreciation_log.get("total_tokens", 0) or 0))
+
+        api_logs.extend(self._consume_embedding_api_logs())
+
+        logs.append(
+            {
+                "mode": "slot_pipe",
+                "selected_slots": selected_slots,
+                "final_slots": current_slots,
+                "initial_slot_limit": "all",
+                "slot_timeline": slot_timeline,
+                "agents_per_slot": agents_per_slot,
+                "max_retries": max_retries,
+                "judge_model": judge_model,
+                "final_appreciation_model": final_appreciation_model,
+                "embedding_summary": self._build_embedding_summary(api_logs),
+                "api_enabled": self.api_client.enabled,
+                "api_failures": [x for x in api_logs if not x.get("ok")],
+                "token_usage": self.tracker.snapshot(),
+            }
+        )
+
+        return PipelineResult(
+            mode="slot_pipe",
+            selected_slots=current_slots,
+            slot_context={
+                slot: "\n".join(f"- {p.get('point', '')}" for p in points if str(p.get("point", "")).strip())
+                for slot, points in previous_layer_points.items()
+            },
+            baseline_prompt="slot_pipe_mode",
+            enhanced_prompt=final_prompt,
+            baseline_analysis="",
+            enhanced_analysis=final_analysis,
+            solitary_rounds=[],
+            communal_rounds=[],
+            slot_pipe_layers=slot_pipe_layers,
+            token_usage=self.tracker.snapshot(),
+            api_logs=api_logs,
+            logs=logs,
+        )
+
+    def _run_slot_pipe_agent_tasks(
+        self,
+        image_path: str,
+        meta: dict,
+        layer_index: int,
+        layer_name: str,
+        layer_goal: str,
+        previous_layer_points: dict[str, list[dict]],
+        tasks: list[dict],
+        slot_states: dict[str, dict],
+    ) -> list[dict]:
+        if not tasks:
+            return []
+
+        logs: list[dict] = []
+        max_workers = max(1, min(len(tasks), 16))
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            future_map = {
+                pool.submit(
+                    self._run_slot_pipe_agent_call,
+                    image_path=image_path,
+                    meta=meta,
+                    layer_index=layer_index,
+                    layer_name=layer_name,
+                    layer_goal=layer_goal,
+                    slot=str(task.get("slot", "")).strip(),
+                    previous_layer_points=previous_layer_points.get(str(task.get("slot", "")).strip()) or [],
+                    judge_feedback=str(task.get("feedback", "")).strip(),
+                    agent_index=int(task.get("agent_index", 0) or 0),
+                    attempt_index=int(task.get("attempt_index", 0) or 0),
+                ): task
+                for task in tasks
+            }
+            for future in as_completed(future_map):
+                task = future_map[future]
+                slot = str(task.get("slot", "")).strip()
+                agent_index = int(task.get("agent_index", 0) or 0)
+                try:
+                    text, log = future.result()
+                except Exception as exc:
+                    log = {
+                        "stage": "slot_pipe_agent",
+                        "layer_index": layer_index,
+                        "layer_name": layer_name,
+                        "slot": slot,
+                        "agent_index": agent_index,
+                        "attempt_index": int(task.get("attempt_index", 0) or 0),
+                        "inference_kind": f"slot_pipe_l{layer_index}_{self._slug(slot)}_a{agent_index}_task_error",
+                        "model": self.config.agent_model,
+                        "ok": False,
+                        "error": f"slot_pipe_agent_task_exception: {exc}",
+                        "image_attached": False,
+                        "prompt_tokens": 0,
+                        "completion_tokens": 0,
+                        "total_tokens": 0,
+                        "status_code": None,
+                        "endpoint": "",
+                        "request_summary": {},
+                        "response_summary": {},
+                        "prompt_text": "",
+                        "response_text": "",
+                    }
+                    text = ""
+
+                logs.append(log)
+                state = slot_states.get(slot)
+                if not state:
+                    continue
+                if text:
+                    state["latest_text_by_agent"][agent_index] = text
+                state["agent_attempts"].append(log)
+
+        for slot, state in slot_states.items():
+            state["agent_attempts"].sort(
+                key=lambda item: (
+                    int(item.get("agent_index", 0) or 0),
+                    int(item.get("attempt_index", 0) or 0),
+                )
+            )
+        return logs
+
+    def _normalize_retry_tasks(
+        self,
+        raw: object,
+        current_slots: list[str],
+        max_agent: int,
+    ) -> list[dict]:
+        if not isinstance(raw, list):
+            return []
+        valid_slots = set(current_slots)
+        normalized: list[dict] = []
+        seen: set[tuple[str, int]] = set()
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            slot = str(item.get("slot", "")).strip()
+            if slot not in valid_slots:
+                continue
+            try:
+                agent_index = int(item.get("agent_index", 0) or 0)
+            except Exception:
+                continue
+            if agent_index < 1 or agent_index > max_agent:
+                continue
+            key = (slot, agent_index)
+            if key in seen:
+                continue
+            seen.add(key)
+            feedback = str(item.get("feedback", "")).strip()
+            normalized.append(
+                {
+                    "slot": slot,
+                    "agent_index": agent_index,
+                    "feedback": feedback,
+                    "attempt_index": 0,
+                }
+            )
+        return normalized
+
+    def _run_slot_pipe_one_slot(
+        self,
+        image_path: str,
+        meta: dict,
+        layer_index: int,
+        layer_name: str,
+        layer_goal: str,
+        slot: str,
+        previous_layer_points: list[dict],
+        agents_per_slot: int,
+        max_retries: int,
+        judge_model: str | None,
+    ) -> dict:
+        latest_text_by_agent: dict[int, str] = {}
+        slot_record: dict = {
+            "slot": slot,
+            "agent_attempts": [],
+            "judge_rounds": [],
+        }
+        slot_api_logs: list[dict] = []
+
+        with ThreadPoolExecutor(max_workers=agents_per_slot) as agent_pool:
+            initial_futures = {
+                agent_pool.submit(
+                    self._run_slot_pipe_agent_call,
+                    image_path=image_path,
+                    meta=meta,
+                    layer_index=layer_index,
+                    layer_name=layer_name,
+                    layer_goal=layer_goal,
+                    slot=slot,
+                    previous_layer_points=previous_layer_points,
+                    judge_feedback="",
+                    agent_index=agent_index,
+                    attempt_index=1,
+                ): agent_index
+                for agent_index in range(1, agents_per_slot + 1)
+            }
+            initial_attempts: list[dict] = []
+            for future in as_completed(initial_futures):
+                agent_index = initial_futures[future]
+                attempt_text, attempt_log = future.result()
+                latest_text_by_agent[agent_index] = attempt_text
+                initial_attempts.append(attempt_log)
+                slot_api_logs.append(attempt_log)
+            initial_attempts.sort(key=lambda x: int(x.get("agent_index", 0) or 0))
+            slot_record["agent_attempts"].extend(initial_attempts)
+
+        judge_round = 1
+        retry_count = 0
+        while True:
+            pooled_points = self._pool_slot_points(latest_text_by_agent)
+            judge_result, judge_log = self._run_slot_pipe_slot_judge(
+                image_path=image_path,
+                layer_index=layer_index,
+                layer_name=layer_name,
+                layer_goal=layer_goal,
+                slot=slot,
+                max_retry=max_retries,
+                retry_round=judge_round,
+                pooled_points=pooled_points,
+                latest_text_by_agent=latest_text_by_agent,
+                judge_model=judge_model,
+            )
+            slot_record["judge_rounds"].append(judge_log)
+            slot_api_logs.append(judge_log)
+
+            if judge_result.get("slot_status") != "needs_improve":
+                break
+            if retry_count >= max_retries:
+                break
+
+            agents_to_retry = self._normalize_agent_indexes(
+                judge_result.get("agents_to_retry"),
+                max_agent=agents_per_slot,
+            )
+            if not agents_to_retry:
+                break
+
+            feedback_by_agent = judge_result.get("feedback_by_agent") or {}
+            next_attempt_index_map = {
+                agent_index: self._count_agent_attempts(slot_record["agent_attempts"], agent_index) + 1
+                for agent_index in agents_to_retry
+            }
+
+            with ThreadPoolExecutor(max_workers=max(1, len(agents_to_retry))) as retry_pool:
+                retry_futures = {
+                    retry_pool.submit(
+                        self._run_slot_pipe_agent_call,
+                        image_path=image_path,
+                        meta=meta,
+                        layer_index=layer_index,
+                        layer_name=layer_name,
+                        layer_goal=layer_goal,
+                        slot=slot,
+                        previous_layer_points=previous_layer_points,
+                        judge_feedback=str(feedback_by_agent.get(str(agent_index), "")).strip(),
+                        agent_index=agent_index,
+                        attempt_index=next_attempt_index_map[agent_index],
+                    ): agent_index
+                    for agent_index in agents_to_retry
+                }
+                retry_attempts: list[dict] = []
+                for future in as_completed(retry_futures):
+                    agent_index = retry_futures[future]
+                    retry_text, retry_log = future.result()
+                    latest_text_by_agent[agent_index] = retry_text
+                    retry_attempts.append(retry_log)
+                    slot_api_logs.append(retry_log)
+                retry_attempts.sort(
+                    key=lambda x: (
+                        int(x.get("agent_index", 0) or 0),
+                        int(x.get("attempt_index", 0) or 0),
+                    )
+                )
+                slot_record["agent_attempts"].extend(retry_attempts)
+
+            retry_count += 1
+            judge_round += 1
+
+        final_points = self._pool_slot_points(latest_text_by_agent)
+        slot_record["final_points"] = final_points
+        slot_record["latest_agent_outputs"] = [
+            {"agent_index": idx, "text": text}
+            for idx, text in sorted(latest_text_by_agent.items())
+        ]
+        return {
+            "slot": slot,
+            "slot_record": slot_record,
+            "final_points": final_points,
+            "api_logs": slot_api_logs,
+        }
+
+    def _run_slot_pipe_agent_call(
+        self,
+        image_path: str,
+        meta: dict,
+        layer_index: int,
+        layer_name: str,
+        layer_goal: str,
+        slot: str,
+        previous_layer_points: list[dict],
+        judge_feedback: str,
+        agent_index: int,
+        attempt_index: int,
+    ) -> tuple[str, dict]:
+        prompt = build_slot_pipe_agent_prompt(
+            layer_index=layer_index,
+            layer_name=layer_name,
+            layer_goal=layer_goal,
+            slot=slot,
+            meta=meta,
+            previous_layer_slot_points=previous_layer_points,
+            judge_feedback=judge_feedback,
+            agent_index=agent_index,
+            attempt_index=attempt_index,
+        )
+        result = self.api_client.chat(
+            system_prompt="你是国画领域的分工agent，请按任务要求做图像鉴赏。",
+            user_prompt=prompt,
+            temperature=self.config.agent_temperature,
+            image_path=image_path,
+            model=self.config.agent_model,
+        )
+        content = (result.content or "").strip() or "API不可用或调用失败，未获得slot_pipe agent输出。"
+        self._track_text(
+            f"slot_pipe_l{layer_index}_{slot}_agent{agent_index}_attempt{attempt_index}_prompt",
+            prompt,
+        )
+        self._track_text(
+            f"slot_pipe_l{layer_index}_{slot}_agent{agent_index}_attempt{attempt_index}_analysis",
+            content,
+        )
+        self._track_api_usage(
+            f"slot_pipe_l{layer_index}_{slot}_agent{agent_index}_attempt{attempt_index}",
+            int(result.total_tokens or 0),
+        )
+        log = {
+            "stage": "slot_pipe_agent",
+            "layer_index": layer_index,
+            "layer_name": layer_name,
+            "slot": slot,
+            "agent_index": agent_index,
+            "attempt_index": attempt_index,
+            "inference_kind": f"slot_pipe_l{layer_index}_{self._slug(slot)}_a{agent_index}_t{attempt_index}",
+            "model": result.model,
+            "ok": bool(result.content),
+            "error": result.error,
+            "image_attached": result.image_attached,
+            "prompt_tokens": result.prompt_tokens,
+            "completion_tokens": result.completion_tokens,
+            "total_tokens": result.total_tokens,
+            "status_code": result.status_code,
+            "endpoint": result.endpoint,
+            "request_summary": result.request_summary,
+            "response_summary": result.response_summary,
+            "prompt_text": prompt,
+            "response_text": content,
+        }
+        return content, log
+
+    def _run_slot_pipe_slot_judge(
+        self,
+        image_path: str,
+        layer_index: int,
+        layer_name: str,
+        layer_goal: str,
+        slot: str,
+        max_retry: int,
+        retry_round: int,
+        pooled_points: list[dict],
+        latest_text_by_agent: dict[int, str],
+        judge_model: str | None,
+    ) -> tuple[dict, dict]:
+        latest_agent_outputs = [
+            {"agent_index": idx, "text": text}
+            for idx, text in sorted(latest_text_by_agent.items())
+        ]
+        prompt = build_slot_pipe_slot_judge_prompt(
+            layer_index=layer_index,
+            layer_name=layer_name,
+            layer_goal=layer_goal,
+            slot=slot,
+            max_retry=max_retry,
+            retry_round=retry_round,
+            pooled_points=pooled_points,
+            latest_agent_outputs=latest_agent_outputs,
+        )
+        result = self.api_client.chat(
+            system_prompt="你是严格JSON输出的质量评审员。",
+            user_prompt=prompt,
+            temperature=0.1,
+            image_path=image_path,
+            model=judge_model,
+        )
+        raw = (result.content or "").strip()
+        parsed = self._parse_json_object(raw)
+        if not parsed:
+            parsed = {
+                "slot_status": "good",
+                "reason": "judge_parse_failed_fallback_good",
+                "agents_to_retry": [],
+                "feedback_by_agent": {},
+            }
+        self._track_text(f"slot_pipe_l{layer_index}_{slot}_judge_r{retry_round}_prompt", prompt)
+        self._track_text(f"slot_pipe_l{layer_index}_{slot}_judge_r{retry_round}_analysis", raw)
+        self._track_api_usage(
+            f"slot_pipe_l{layer_index}_{slot}_judge_r{retry_round}",
+            int(result.total_tokens or 0),
+        )
+        log = {
+            "stage": "slot_pipe_slot_judge",
+            "layer_index": layer_index,
+            "layer_name": layer_name,
+            "slot": slot,
+            "judge_round": retry_round,
+            "inference_kind": f"slot_pipe_l{layer_index}_{self._slug(slot)}_judge_r{retry_round}",
+            "model": result.model,
+            "ok": bool(result.content),
+            "error": result.error,
+            "image_attached": result.image_attached,
+            "prompt_tokens": result.prompt_tokens,
+            "completion_tokens": result.completion_tokens,
+            "total_tokens": result.total_tokens,
+            "status_code": result.status_code,
+            "endpoint": result.endpoint,
+            "request_summary": result.request_summary,
+            "response_summary": result.response_summary,
+            "prompt_text": prompt,
+            "response_text": raw,
+            "judge_result": parsed,
+        }
+        return parsed, log
+
+    def _run_slot_pipe_layer_judge(
+        self,
+        image_path: str,
+        layer_index: int,
+        layer_name: str,
+        layer_goal: str,
+        current_slots: list[str],
+        slot_global_payload: dict[str, dict],
+        max_retry: int,
+        retry_round: int,
+        judge_model: str | None,
+    ) -> tuple[dict, dict]:
+        prompt = build_slot_pipe_layer_judge_prompt(
+            layer_index=layer_index,
+            layer_name=layer_name,
+            layer_goal=layer_goal,
+            current_slots=current_slots,
+            slot_global_payload=slot_global_payload,
+            max_retry=max_retry,
+            retry_round=retry_round,
+        )
+        result = self.api_client.chat(
+            system_prompt="你是层级规划judge，请只返回JSON。",
+            user_prompt=prompt,
+            temperature=0.1,
+            image_path=image_path,
+            model=judge_model,
+        )
+        raw = (result.content or "").strip()
+        parsed = self._parse_json_object(raw)
+        if not parsed:
+            parsed = {
+                "layer_ok": True,
+                "summary": "judge_parse_failed_keep_slots",
+                "slot_decisions": [],
+                "retry_tasks": [],
+                "slot_updates": [],
+                "next_slots": current_slots,
+            }
+        self._track_text(f"slot_pipe_l{layer_index}_layer_judge_prompt", prompt)
+        self._track_text(f"slot_pipe_l{layer_index}_layer_judge_analysis", raw)
+        self._track_api_usage(f"slot_pipe_l{layer_index}_layer_judge", int(result.total_tokens or 0))
+        log = {
+            "stage": "slot_pipe_layer_judge",
+            "layer_index": layer_index,
+            "layer_name": layer_name,
+            "slot": None,
+            "inference_kind": f"slot_pipe_l{layer_index}_layer_judge",
+            "model": result.model,
+            "ok": bool(result.content),
+            "error": result.error,
+            "image_attached": result.image_attached,
+            "prompt_tokens": result.prompt_tokens,
+            "completion_tokens": result.completion_tokens,
+            "total_tokens": result.total_tokens,
+            "status_code": result.status_code,
+            "endpoint": result.endpoint,
+            "request_summary": result.request_summary,
+            "response_summary": result.response_summary,
+            "prompt_text": prompt,
+            "response_text": raw,
+            "judge_result": parsed,
+        }
+        return parsed, log
+
+    def _track_text(self, stage: str, text: str) -> None:
+        with self._tracker_lock:
+            self.tracker.add_text(stage, text)
+
+    def _track_api_usage(self, stage: str, total_tokens: int) -> None:
+        with self._tracker_lock:
+            self.tracker.add_api_usage(stage, total_tokens)
+
+    @staticmethod
+    def _build_embedding_summary(api_logs: list[dict]) -> dict:
+        embedding_logs = [x for x in api_logs if x.get("stage") == "slot_pipe_embedding"]
+        total = len(embedding_logs)
+        parse_ok = sum(1 for x in embedding_logs if bool(x.get("embedding_parse_ok")))
+        fallback = sum(1 for x in embedding_logs if bool(x.get("fallback_used")))
+        api_ok = sum(1 for x in embedding_logs if bool(x.get("ok")))
+        return {
+            "total": total,
+            "api_ok": api_ok,
+            "embedding_parse_ok": parse_ok,
+            "fallback_used": fallback,
+        }
+
+    def _reset_embedding_api_logs(self) -> None:
+        with self._embedding_logs_lock:
+            self._embedding_api_logs = []
+
+    def _append_embedding_api_log(self, log: dict) -> None:
+        with self._embedding_logs_lock:
+            self._embedding_api_logs.append(log)
+
+    def _consume_embedding_api_logs(self) -> list[dict]:
+        with self._embedding_logs_lock:
+            return list(self._embedding_api_logs)
+
+    def _pool_slot_points(self, latest_text_by_agent: dict[int, str]) -> list[dict]:
+        merged = self._collect_and_merge_points(latest_text_by_agent)
+        if not merged:
+            return []
+
+        if len(merged) <= 5:
+            ranked = sorted(
+                merged,
+                key=lambda x: (-int(x.get("support", 0)), -len(str(x.get("point", "")))),
+            )
+            return ranked
+
+        target_k = self._target_cluster_count(len(merged))
+        texts = [str(item.get("point", "")) for item in merged]
+        embeddings = self._embed_texts(texts)
+        clusters = self._kmeans_cluster(embeddings, k=target_k, iterations=8)
+
+        representatives: list[dict] = []
+        for cluster_indexes in clusters:
+            if not cluster_indexes:
+                continue
+            centroid = self._mean_vector([embeddings[i] for i in cluster_indexes])
+            best_idx = cluster_indexes[0]
+            best_score = -10.0
+            cluster_sources: set[int] = set()
+            cluster_support = 0
+
+            for idx in cluster_indexes:
+                item = merged[idx]
+                support = int(item.get("support", 0) or 0)
+                cluster_support += support
+                cluster_sources.update(int(x) for x in (item.get("sources") or []))
+                sim = self._cosine_similarity(embeddings[idx], centroid)
+                score = sim + (support * 0.02)
+                if score > best_score:
+                    best_score = score
+                    best_idx = idx
+
+            rep_item = dict(merged[best_idx])
+            rep_item["sources"] = sorted(cluster_sources)
+            rep_item["support"] = cluster_support
+            representatives.append(rep_item)
+
+        ranked_reps = sorted(
+            representatives,
+            key=lambda x: (-int(x.get("support", 0)), -len(str(x.get("point", "")))),
+        )
+        return ranked_reps[:5]
+
+    @staticmethod
+    def _collect_and_merge_points(latest_text_by_agent: dict[int, str]) -> list[dict]:
+        bucket: dict[str, dict] = {}
+        for agent_index, text in sorted(latest_text_by_agent.items()):
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            for line in lines:
+                clean = line.lstrip("-*• ").strip()
+                if not clean:
+                    continue
+                key = TcpPromptPipeline._semantic_key(clean)
+                item = bucket.get(key)
+                if not item:
+                    bucket[key] = {
+                        "point": clean,
+                        "sources": [agent_index],
+                        "support": 1,
+                    }
+                else:
+                    item["support"] = int(item.get("support", 0) or 0) + 1
+                    sources = list(item.get("sources") or [])
+                    if agent_index not in sources:
+                        sources.append(agent_index)
+                    item["sources"] = sorted(sources)
+                    if len(clean) > len(str(item.get("point", ""))):
+                        item["point"] = clean
+        return list(bucket.values())
+
+    @staticmethod
+    def _target_cluster_count(n_points: int) -> int:
+        if n_points <= 2:
+            return n_points
+        if n_points <= 5:
+            return n_points
+        approx = int(round(math.sqrt(n_points) + 1))
+        return min(5, max(3, approx))
+
+    def _embed_texts(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+
+        model_name = self.config.embedding_model or os.getenv("EMBEDDING_MODEL_NAME") or os.getenv("BGE_MODEL_NAME", "baai/bge-m3")
+
+        emb = self.api_client.embeddings(texts, model=model_name)
+        self._track_api_usage("slot_pipe_embedding", int(emb.get("total_tokens", 0) or 0))
+        raw_vectors = emb.get("vectors") if isinstance(emb.get("vectors"), list) else []
+        emb_usable = bool(emb.get("ok")) and len(raw_vectors) == len(texts)
+
+        if emb_usable:
+            vectors: list[list[float]] = []
+            for idx, text in enumerate(texts):
+                candidate = raw_vectors[idx]
+                vector: list[float] = []
+                if isinstance(candidate, list):
+                    for x in candidate:
+                        try:
+                            vector.append(float(x))
+                        except Exception:
+                            continue
+
+                if vector:
+                    norm = math.sqrt(sum(v * v for v in vector))
+                    if norm > 0:
+                        vector = [v / norm for v in vector]
+                    vectors.append(vector)
+                    self._append_embedding_api_log(
+                        {
+                            "stage": "slot_pipe_embedding",
+                            "layer_index": None,
+                            "layer_name": "pooling",
+                            "slot": None,
+                            "inference_kind": f"slot_pipe_embedding_t{idx + 1}",
+                            "model": emb.get("model") or model_name,
+                            "ok": bool(emb.get("ok")),
+                            "error": emb.get("error"),
+                            "image_attached": False,
+                            "prompt_tokens": emb.get("prompt_tokens", 0),
+                            "completion_tokens": 0,
+                            "total_tokens": emb.get("total_tokens", 0),
+                            "status_code": emb.get("status_code"),
+                            "endpoint": emb.get("endpoint", ""),
+                            "request_summary": emb.get("request_summary", {}),
+                            "response_summary": emb.get("response_summary", {}),
+                            "prompt_text": text,
+                            "response_text": "",
+                            "embedding_parse_ok": True,
+                            "fallback_used": False,
+                        }
+                    )
+                else:
+                    fallback_vector = self._text_to_embedding(text)
+                    vectors.append(fallback_vector)
+                    self._append_embedding_api_log(
+                        {
+                            "stage": "slot_pipe_embedding",
+                            "layer_index": None,
+                            "layer_name": "pooling",
+                            "slot": None,
+                            "inference_kind": f"slot_pipe_embedding_t{idx + 1}",
+                            "model": emb.get("model") or model_name,
+                            "ok": bool(emb.get("ok")),
+                            "error": "embedding_vector_empty_fallback",
+                            "image_attached": False,
+                            "prompt_tokens": emb.get("prompt_tokens", 0),
+                            "completion_tokens": 0,
+                            "total_tokens": emb.get("total_tokens", 0),
+                            "status_code": emb.get("status_code"),
+                            "endpoint": emb.get("endpoint", ""),
+                            "request_summary": emb.get("request_summary", {}),
+                            "response_summary": emb.get("response_summary", {}),
+                            "prompt_text": text,
+                            "response_text": "",
+                            "embedding_parse_ok": False,
+                            "fallback_used": True,
+                        }
+                    )
+            return self._pad_vectors(vectors, texts)
+
+        self._append_embedding_api_log(
+            {
+                "stage": "slot_pipe_embedding",
+                "layer_index": None,
+                "layer_name": "pooling",
+                "slot": None,
+                "inference_kind": "slot_pipe_embedding_batch",
+                "model": emb.get("model") or model_name,
+                "ok": bool(emb.get("ok")),
+                "error": emb.get("error") or "embedding_batch_unavailable",
+                "image_attached": False,
+                "prompt_tokens": emb.get("prompt_tokens", 0),
+                "completion_tokens": 0,
+                "total_tokens": emb.get("total_tokens", 0),
+                "status_code": emb.get("status_code"),
+                "endpoint": emb.get("endpoint", ""),
+                "request_summary": emb.get("request_summary", {}),
+                "response_summary": emb.get("response_summary", {}),
+                "prompt_text": "",
+                "response_text": "",
+                "embedding_parse_ok": False,
+                "fallback_used": True,
+            }
+        )
+
+        def embed_one(text: str, text_index: int) -> list[float]:
+            prompt = (
+                "请为下面句子生成语义向量并只输出JSON。"
+                "返回格式必须是 {\"embedding\": [float, ...]}，不要输出任何额外文字。\n\n"
+                f"句子：{text}"
+            )
+            result = self.api_client.chat(
+                system_prompt="你是embedding服务返回器，只输出JSON。",
+                user_prompt=prompt,
+                temperature=0.0,
+                image_path=None,
+                model=model_name,
+            )
+            self._track_api_usage("slot_pipe_embedding", int(result.total_tokens or 0))
+            raw = (result.content or "").strip()
+            parsed = self._parse_json_object(raw)
+            vector: list[float] = []
+            parsed_ok = False
+            if parsed and isinstance(parsed.get("embedding"), list):
+                for item in parsed.get("embedding", []):
+                    try:
+                        vector.append(float(item))
+                    except Exception:
+                        continue
+                if vector:
+                    parsed_ok = True
+                    norm = math.sqrt(sum(v * v for v in vector))
+                    normalized = vector
+                    if norm > 0:
+                        normalized = [v / norm for v in vector]
+                    self._append_embedding_api_log(
+                        {
+                            "stage": "slot_pipe_embedding",
+                            "layer_index": None,
+                            "layer_name": "pooling",
+                            "slot": None,
+                            "inference_kind": f"slot_pipe_embedding_t{text_index + 1}",
+                            "model": result.model,
+                            "ok": bool(result.content),
+                            "error": result.error,
+                            "image_attached": result.image_attached,
+                            "prompt_tokens": result.prompt_tokens,
+                            "completion_tokens": result.completion_tokens,
+                            "total_tokens": result.total_tokens,
+                            "status_code": result.status_code,
+                            "endpoint": result.endpoint,
+                            "request_summary": result.request_summary,
+                            "response_summary": result.response_summary,
+                            "prompt_text": prompt,
+                            "response_text": raw,
+                            "embedding_parse_ok": parsed_ok,
+                            "fallback_used": False,
+                        }
+                    )
+                    return normalized
+
+            fallback_vector = self._text_to_embedding(text)
+            self._append_embedding_api_log(
+                {
+                    "stage": "slot_pipe_embedding",
+                    "layer_index": None,
+                    "layer_name": "pooling",
+                    "slot": None,
+                    "inference_kind": f"slot_pipe_embedding_t{text_index + 1}",
+                    "model": result.model,
+                    "ok": bool(result.content),
+                    "error": result.error,
+                    "image_attached": result.image_attached,
+                    "prompt_tokens": result.prompt_tokens,
+                    "completion_tokens": result.completion_tokens,
+                    "total_tokens": result.total_tokens,
+                    "status_code": result.status_code,
+                    "endpoint": result.endpoint,
+                    "request_summary": result.request_summary,
+                    "response_summary": result.response_summary,
+                    "prompt_text": prompt,
+                    "response_text": raw,
+                    "embedding_parse_ok": False,
+                    "fallback_used": True,
+                }
+            )
+            return fallback_vector
+
+        vectors: list[list[float]] = []
+        max_workers = max(1, min(len(texts), 8))
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {pool.submit(embed_one, text, idx): idx for idx, text in enumerate(texts)}
+            temp: dict[int, list[float]] = {}
+            for future in as_completed(futures):
+                idx = futures[future]
+                try:
+                    temp[idx] = future.result()
+                except Exception:
+                    self._append_embedding_api_log(
+                        {
+                            "stage": "slot_pipe_embedding",
+                            "layer_index": None,
+                            "layer_name": "pooling",
+                            "slot": None,
+                            "inference_kind": f"slot_pipe_embedding_t{idx + 1}",
+                            "model": model_name,
+                            "ok": False,
+                            "error": "embedding_task_exception",
+                            "image_attached": False,
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "total_tokens": 0,
+                            "status_code": None,
+                            "endpoint": "",
+                            "request_summary": {},
+                            "response_summary": {},
+                            "prompt_text": "",
+                            "response_text": "",
+                            "embedding_parse_ok": False,
+                            "fallback_used": True,
+                        }
+                    )
+                    temp[idx] = self._text_to_embedding(texts[idx])
+            for idx in range(len(texts)):
+                vectors.append(temp.get(idx, self._text_to_embedding(texts[idx])))
+
+        return self._pad_vectors(vectors, texts)
+
+    def _pad_vectors(self, vectors: list[list[float]], texts: list[str]) -> list[list[float]]:
+        target_dim = max((len(v) for v in vectors), default=0)
+        if target_dim <= 0:
+            return [self._text_to_embedding(text) for text in texts]
+
+        padded: list[list[float]] = []
+        for v in vectors:
+            if len(v) < target_dim:
+                padded.append(v + [0.0] * (target_dim - len(v)))
+            else:
+                padded.append(v)
+        return padded
+
+    @staticmethod
+    def _text_to_embedding(text: str, dim: int = 256) -> list[float]:
+        vector = [0.0] * dim
+        normalized = TcpPromptPipeline._semantic_key(text)
+        if not normalized:
+            return vector
+
+        # Use character bigrams as a lightweight local embedding representation.
+        chars = list(normalized)
+        if len(chars) == 1:
+            idx = ord(chars[0]) % dim
+            vector[idx] += 1.0
+        else:
+            for i in range(len(chars) - 1):
+                bigram = chars[i] + chars[i + 1]
+                idx = sum(ord(c) for c in bigram) % dim
+                vector[idx] += 1.0
+
+        norm = math.sqrt(sum(v * v for v in vector))
+        if norm <= 0:
+            return vector
+        return [v / norm for v in vector]
+
+    @staticmethod
+    def _kmeans_cluster(embeddings: list[list[float]], k: int, iterations: int = 8) -> list[list[int]]:
+        n = len(embeddings)
+        if n == 0:
+            return []
+        k = max(1, min(k, n))
+
+        centroids: list[list[float]] = [list(embeddings[0])]
+        while len(centroids) < k:
+            best_idx = 0
+            best_dist = -1.0
+            for idx, emb in enumerate(embeddings):
+                nearest = max(TcpPromptPipeline._cosine_similarity(emb, c) for c in centroids)
+                dist = 1.0 - nearest
+                if dist > best_dist:
+                    best_dist = dist
+                    best_idx = idx
+            centroids.append(list(embeddings[best_idx]))
+
+        assignments = [0] * n
+        for _ in range(max(1, iterations)):
+            changed = False
+            for i, emb in enumerate(embeddings):
+                best_cluster = 0
+                best_sim = -2.0
+                for c_idx, centroid in enumerate(centroids):
+                    sim = TcpPromptPipeline._cosine_similarity(emb, centroid)
+                    if sim > best_sim:
+                        best_sim = sim
+                        best_cluster = c_idx
+                if assignments[i] != best_cluster:
+                    assignments[i] = best_cluster
+                    changed = True
+
+            clusters = [[] for _ in range(k)]
+            for idx, c_idx in enumerate(assignments):
+                clusters[c_idx].append(idx)
+
+            new_centroids: list[list[float]] = []
+            for c_idx, members in enumerate(clusters):
+                if not members:
+                    new_centroids.append(list(centroids[c_idx]))
+                    continue
+                new_centroids.append(TcpPromptPipeline._mean_vector([embeddings[m] for m in members]))
+            centroids = new_centroids
+
+            if not changed:
+                break
+
+        final_clusters = [[] for _ in range(k)]
+        for idx, c_idx in enumerate(assignments):
+            final_clusters[c_idx].append(idx)
+        return [c for c in final_clusters if c]
+
+    @staticmethod
+    def _mean_vector(vectors: list[list[float]]) -> list[float]:
+        if not vectors:
+            return []
+        dim = len(vectors[0])
+        acc = [0.0] * dim
+        for v in vectors:
+            for i, value in enumerate(v):
+                acc[i] += value
+        size = float(len(vectors))
+        mean = [x / size for x in acc]
+        norm = math.sqrt(sum(v * v for v in mean))
+        if norm <= 0:
+            return mean
+        return [v / norm for v in mean]
+
+    @staticmethod
+    def _cosine_similarity(a: list[float], b: list[float]) -> float:
+        if not a or not b or len(a) != len(b):
+            return 0.0
+        return float(sum(x * y for x, y in zip(a, b)))
+
+    @staticmethod
+    def _semantic_key(text: str) -> str:
+        letters = re.findall(r"[\u4e00-\u9fffA-Za-z0-9]", text.lower())
+        return "".join(letters[:48]) or text.lower()[:48]
+
+    @staticmethod
+    def _parse_json_object(text: str) -> dict | None:
+        if not text.strip():
+            return None
+        candidate = text.strip()
+        try:
+            parsed = json.loads(candidate)
+            return parsed if isinstance(parsed, dict) else None
+        except json.JSONDecodeError:
+            pass
+
+        start = candidate.find("{")
+        end = candidate.rfind("}")
+        if start >= 0 and end > start:
+            block = candidate[start : end + 1]
+            try:
+                parsed = json.loads(block)
+                return parsed if isinstance(parsed, dict) else None
+            except json.JSONDecodeError:
+                return None
+        return None
+
+    @staticmethod
+    def _normalize_agent_indexes(raw: object, max_agent: int) -> list[int]:
+        if not isinstance(raw, list):
+            return []
+        out: list[int] = []
+        seen: set[int] = set()
+        for item in raw:
+            try:
+                idx = int(item)
+            except Exception:
+                continue
+            if idx < 1 or idx > max_agent or idx in seen:
+                continue
+            seen.add(idx)
+            out.append(idx)
+        return out
+
+    @staticmethod
+    def _count_agent_attempts(agent_attempts: list[dict], agent_index: int) -> int:
+        return sum(1 for item in agent_attempts if int(item.get("agent_index", 0) or 0) == agent_index)
+
+    @staticmethod
+    def _normalize_slot_list(
+        raw: object,
+        require_cn_theory: bool = False,
+        avoid_overlap_with: list[str] | None = None,
+    ) -> list[str]:
+        if not isinstance(raw, list):
+            return []
+        out: list[str] = []
+        seen: set[str] = set()
+        overlap_refs = [str(x).strip() for x in (avoid_overlap_with or []) if str(x).strip()]
+        for item in raw:
+            slot = str(item).strip()
+            if not slot:
+                continue
+            if require_cn_theory and not TcpPromptPipeline._is_valid_chinese_theory_slot(slot):
+                continue
+            if overlap_refs and TcpPromptPipeline._is_semantically_overlapping_slot_name(slot, overlap_refs):
+                continue
+            key = slot.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(slot)
+        return out
+
+    @staticmethod
+    def _stabilize_next_slots(current_slots: list[str], proposed_slots: list[str]) -> list[str]:
+        if not current_slots:
+            return list(proposed_slots)
+        if not proposed_slots:
+            return list(current_slots)
+
+        # 演化策略保守化：每层最多减少1个slot，避免过快收缩。
+        min_count = max(1, len(current_slots) - 1)
+        out: list[str] = []
+        seen: set[str] = set()
+        for slot in proposed_slots:
+            key = str(slot).strip().lower()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            out.append(str(slot).strip())
+
+        if len(out) >= min_count:
+            return out
+
+        for slot in current_slots:
+            key = str(slot).strip().lower()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            out.append(str(slot).strip())
+            if len(out) >= min_count:
+                break
+        return out
+
+    @staticmethod
+    def _is_semantically_overlapping_slot_name(slot: str, reference_slots: list[str]) -> bool:
+        candidate = str(slot).strip()
+        if not candidate:
+            return True
+        refs = [str(x).strip() for x in reference_slots if str(x).strip()]
+        included_refs = [ref for ref in refs if ref != candidate and ref in candidate]
+
+        # 避免把多个既有维度合并为一个新slot，例如“笔墨气韵”。
+        if len(included_refs) >= 2:
+            return True
+
+        # 对明显拼接命名做保守过滤。
+        if included_refs and re.search(r"[、/及与和兼并]|以及", candidate):
+            return True
+
+        return False
+
+    @staticmethod
+    def _is_valid_chinese_theory_slot(slot: str) -> bool:
+        text = str(slot).strip()
+        if not text:
+            return False
+        if re.search(r"[A-Za-z]", text):
+            return False
+        if re.search(r"slot", text, flags=re.IGNORECASE):
+            return False
+        chinese_chars = re.findall(r"[\u4e00-\u9fff]", text)
+        if len(chinese_chars) < 2:
+            return False
+
+        # 限制中间层slot使用国画鉴赏理论相关概念，避免泛化命名。
+        theory_terms = [
+            "笔墨", "笔法", "墨法", "皴法", "线条", "设色", "用笔", "用墨", "浓淡", "干湿",
+            "构图", "章法", "经营位置", "虚实", "留白", "层次", "开合", "疏密", "取势",
+            "气韵", "气势", "神采", "格调", "意境", "境界", "韵致", "骨法", "形神",
+            "题款", "题跋", "印章", "款识", "诗书画印", "媒材", "纸墨", "绢本",
+        ]
+        return any(term in text for term in theory_terms)
+
+    @staticmethod
+    def _remap_slot_points_by_updates(
+        slot_points_for_layer: dict[str, list[dict]],
+        slot_updates: list[dict],
+        fallback_slots: list[str],
+    ) -> dict[str, list[dict]]:
+        if not slot_updates:
+            return {k: list(v) for k, v in slot_points_for_layer.items() if k in fallback_slots}
+
+        out: dict[str, list[dict]] = {}
+        touched: set[str] = set()
+
+        def _append_points(dst: str, points: list[dict]) -> None:
+            key = str(dst).strip()
+            if not key:
+                return
+            out.setdefault(key, [])
+            out[key].extend(list(points))
+
+        for item in slot_updates:
+            if not isinstance(item, dict):
+                continue
+            slot = str(item.get("slot", "")).strip()
+            action = str(item.get("action", "keep")).strip().lower()
+            new_slot = str(item.get("new_slot", "")).strip()
+            raw_new_slots = item.get("new_slots")
+            new_slots = [
+                str(x).strip()
+                for x in (raw_new_slots if isinstance(raw_new_slots, list) else [])
+                if str(x).strip()
+            ]
+            if not slot:
+                continue
+            touched.add(slot)
+            points = list(slot_points_for_layer.get(slot) or [])
+
+            if (
+                action == "rename"
+                and new_slot
+                and TcpPromptPipeline._is_valid_chinese_theory_slot(new_slot)
+                and not TcpPromptPipeline._is_semantically_overlapping_slot_name(new_slot, fallback_slots)
+            ):
+                # rename采取“复制而非迁移”：保留原slot语义，避免新slot命名波动导致要点漂移。
+                _append_points(slot, points)
+                _append_points(new_slot, points)
+                continue
+
+            if (
+                action == "reduce"
+                and new_slot
+                and TcpPromptPipeline._is_valid_chinese_theory_slot(new_slot)
+                and not TcpPromptPipeline._is_semantically_overlapping_slot_name(new_slot, fallback_slots)
+            ):
+                # reduce: 多个来源slot可聚合到同一个new_slot。
+                _append_points(new_slot, points)
+                continue
+
+            if action == "split" and new_slots:
+                valid_targets = [
+                    s
+                    for s in new_slots
+                    if TcpPromptPipeline._is_valid_chinese_theory_slot(s)
+                    and not TcpPromptPipeline._is_semantically_overlapping_slot_name(s, fallback_slots)
+                ]
+                if len(valid_targets) >= 2:
+                    for target in valid_targets:
+                        _append_points(target, points)
+                    continue
+
+            _append_points(slot, points)
+
+        for slot, points in slot_points_for_layer.items():
+            if slot in touched:
+                continue
+            _append_points(slot, points)
+
+        for slot in fallback_slots:
+            out.setdefault(slot, list(slot_points_for_layer.get(slot) or []))
+        return out
+
+    @staticmethod
+    def _slug(text: str) -> str:
+        lowered = text.lower().strip()
+        normalized = re.sub(r"[^a-z0-9\u4e00-\u9fff_-]+", "_", lowered)
+        normalized = re.sub(r"_+", "_", normalized).strip("_")
+        return normalized or "slot"
 
     def save_result(self, result: PipelineResult, output_dir: str = "outputs") -> dict[str, str]:
         root_dir = Path(output_dir)
@@ -347,6 +1774,121 @@ class TcpPromptPipeline:
             communal_summary_path.write_text(result.enhanced_analysis, encoding="utf-8")
             output_files["communal_summary"] = str(communal_summary_path)
 
+        if result.mode == "slot_pipe":
+            slot_pipe_dir = run_dir / "slot_pipe"
+            slot_pipe_dir.mkdir(parents=True, exist_ok=True)
+            output_files["slot_pipe_dir"] = str(slot_pipe_dir)
+
+            slots_timeline: list[dict] = []
+            for layer in result.slot_pipe_layers:
+                layer_index = int(layer.get("layer_index", 0) or 0)
+                layer_name = str(layer.get("layer_name", ""))
+                layer_prefix = f"layer{layer_index}_{self._slug(layer_name or str(layer_index))}"
+
+                slots_timeline.append(
+                    {
+                        "layer_index": layer_index,
+                        "layer_name": layer_name,
+                        "slots_before": layer.get("slots_before", []),
+                        "slots_after": layer.get("slots_after", []),
+                    }
+                )
+
+                layer_judge_path = slot_pipe_dir / f"{layer_prefix}_judge.json"
+                layer_judge_path.write_text(
+                    json.dumps(layer.get("layer_judge", {}), ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+                output_files[f"{layer_prefix}_judge"] = str(layer_judge_path)
+
+                layer_judge_prompt_path = slot_pipe_dir / f"{layer_prefix}_judge_prompt.md"
+                layer_judge_analysis_path = slot_pipe_dir / f"{layer_prefix}_judge_analysis.md"
+                layer_judge_prompt_path.write_text(str((layer.get("layer_judge", {}) or {}).get("prompt_text", "")), encoding="utf-8")
+                layer_judge_analysis_path.write_text(str((layer.get("layer_judge", {}) or {}).get("response_text", "")), encoding="utf-8")
+                output_files[f"{layer_prefix}_judge_prompt"] = str(layer_judge_prompt_path)
+                output_files[f"{layer_prefix}_judge_analysis"] = str(layer_judge_analysis_path)
+
+                for slot_info in layer.get("slots", []):
+                    slot = str(slot_info.get("slot", ""))
+                    slot_slug = self._slug(slot)
+                    for attempt in slot_info.get("agent_attempts", []):
+                        agent_index = int(attempt.get("agent_index", 0) or 0)
+                        attempt_index = int(attempt.get("attempt_index", 0) or 0)
+                        base = f"{layer_prefix}_slot_{slot_slug}_agent{agent_index}_attempt{attempt_index}"
+                        prompt_path = slot_pipe_dir / f"{base}_prompt.md"
+                        analysis_path = slot_pipe_dir / f"{base}_analysis.md"
+                        prompt_path.write_text(str(attempt.get("prompt_text", "")), encoding="utf-8")
+                        analysis_path.write_text(str(attempt.get("response_text", "")), encoding="utf-8")
+                        output_files[f"{base}_prompt"] = str(prompt_path)
+                        output_files[f"{base}_analysis"] = str(analysis_path)
+
+                    pooled_path = slot_pipe_dir / f"{layer_prefix}_slot_{slot_slug}_pooled.json"
+                    pooled_path.write_text(
+                        json.dumps(slot_info.get("final_points", []), ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
+                    output_files[f"{layer_prefix}_slot_{slot_slug}_pooled"] = str(pooled_path)
+
+                    judge_rounds_path = slot_pipe_dir / f"{layer_prefix}_slot_{slot_slug}_judge_rounds.json"
+                    judge_rounds_path.write_text(
+                        json.dumps(slot_info.get("judge_rounds", []), ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
+                    output_files[f"{layer_prefix}_slot_{slot_slug}_judge_rounds"] = str(judge_rounds_path)
+
+                    for round_index, judge_item in enumerate(slot_info.get("judge_rounds", []), start=1):
+                        if not isinstance(judge_item, dict):
+                            continue
+                        if str(judge_item.get("stage", "")) != "slot_pipe_slot_judge":
+                            continue
+                        judge_prompt_path = slot_pipe_dir / f"{layer_prefix}_slot_{slot_slug}_judge_round{round_index}_prompt.md"
+                        judge_analysis_path = slot_pipe_dir / f"{layer_prefix}_slot_{slot_slug}_judge_round{round_index}_analysis.md"
+                        judge_prompt_path.write_text(str(judge_item.get("prompt_text", "")), encoding="utf-8")
+                        judge_analysis_path.write_text(str(judge_item.get("response_text", "")), encoding="utf-8")
+                        output_files[f"{layer_prefix}_slot_{slot_slug}_judge_round{round_index}_prompt"] = str(judge_prompt_path)
+                        output_files[f"{layer_prefix}_slot_{slot_slug}_judge_round{round_index}_analysis"] = str(judge_analysis_path)
+
+            slots_timeline_path = slot_pipe_dir / "slots_timeline.json"
+            slots_timeline_path.write_text(
+                json.dumps(slots_timeline, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            output_files["slot_pipe_slots_timeline"] = str(slots_timeline_path)
+
+            final_prompt_path = slot_pipe_dir / "final_prompt_supplement.md"
+            final_prompt_path.write_text(result.enhanced_prompt, encoding="utf-8")
+            output_files["slot_pipe_final_prompt"] = str(final_prompt_path)
+
+            final_appreciation_path = slot_pipe_dir / "final_appreciation.md"
+            final_appreciation_path.write_text(result.enhanced_analysis, encoding="utf-8")
+            output_files["slot_pipe_final_appreciation"] = str(final_appreciation_path)
+
+            final_points_path = slot_pipe_dir / "final_slot_points.json"
+            final_points_payload: dict[str, list[dict]] = {}
+            if result.slot_pipe_layers:
+                last_layer = result.slot_pipe_layers[-1]
+                for slot_info in last_layer.get("slots", []):
+                    slot = str(slot_info.get("slot", "")).strip()
+                    if not slot:
+                        continue
+                    points = []
+                    for item in slot_info.get("final_points", []):
+                        if not isinstance(item, dict):
+                            continue
+                        points.append(
+                            {
+                                "point": item.get("point", ""),
+                                "sources": item.get("sources", []),
+                                "support": item.get("support", 0),
+                            }
+                        )
+                    final_points_payload[slot] = points
+            final_points_path.write_text(
+                json.dumps(final_points_payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            output_files["slot_pipe_final_points"] = str(final_points_path)
+
         api_calls_path.write_text(
             "\n".join(
                 [json.dumps({"type": "run_meta", "mode": result.mode}, ensure_ascii=False)]
@@ -384,6 +1926,7 @@ class TcpPromptPipeline:
                     "api_logs": result.api_logs,
                     "solitary_rounds": result.solitary_rounds,
                     "communal_rounds": result.communal_rounds,
+                    "slot_pipe_layers": result.slot_pipe_layers,
                     "logs": result.logs,
                     "output_files": output_files,
                     "api_calls_file": str(api_calls_path),
