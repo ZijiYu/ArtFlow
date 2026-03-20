@@ -59,6 +59,34 @@ def build_parser() -> argparse.ArgumentParser:
         default=3,
         help="slot_pipe模式每个slot最多返工轮数，默认3",
     )
+    parser.add_argument(
+        "--slot-pipe-version",
+        type=int,
+        default=4,
+        help="slot_pipe版本，默认4；可设为3以回退旧流程",
+    )
+    parser.add_argument(
+        "--slot-pipe-slots-file",
+        default="artifacts/slots.jsonl",
+        help="slot_pipe v4的slots输入文件(JSONL)，默认artifacts/slots.jsonl",
+    )
+    parser.add_argument(
+        "--slot-pipe-content-agents",
+        type=int,
+        default=2,
+        help="slot_pipe v4内容层每个slot调用次数，默认2",
+    )
+    parser.add_argument(
+        "--slot-pipe-expression-guests",
+        type=int,
+        default=3,
+        help="slot_pipe v4表达层每个问题的群赏人数，默认3",
+    )
+    parser.add_argument("--checker-model", default="", help="slot_pipe v4要素确认层checker模型")
+    parser.add_argument("--reviewer-model", default="", help="slot_pipe v4要素确认层reviewer模型")
+    parser.add_argument("--content-model", default="", help="slot_pipe v4内容要点层模型")
+    parser.add_argument("--expression-guest-model", default="", help="slot_pipe v4群赏客人模型")
+    parser.add_argument("--expression-summary-model", default="", help="slot_pipe v4群赏池化摘要模型")
     parser.add_argument("--agent-model", default="", help="slot小模型名称，留空则用NEW_API_MODEL")
     parser.add_argument(
         "--embedding-model",
@@ -97,11 +125,20 @@ def main() -> None:
             judge_model=args.judge_model or None,
             slot_pipe_agents_per_slot=max(1, args.slot_pipe_agents_per_slot),
             slot_pipe_max_retries=max(0, args.slot_pipe_max_retries),
+            slot_pipe_version=max(3, args.slot_pipe_version),
+            slot_pipe_slots_file=args.slot_pipe_slots_file or None,
+            slot_pipe_content_agents=max(1, args.slot_pipe_content_agents),
+            slot_pipe_expression_guests=max(1, args.slot_pipe_expression_guests),
             agent_model=args.agent_model or None,
             embedding_model=args.embedding_model or None,
             baseline_model=args.baseline_model or None,
             enhanced_model=args.enhanced_model or None,
             final_appreciation_model=args.final_appreciation_model or None,
+            checker_model=args.checker_model or None,
+            reviewer_model=args.reviewer_model or None,
+            content_model=args.content_model or None,
+            expression_guest_model=args.expression_guest_model or None,
+            expression_summary_model=args.expression_summary_model or None,
         ),
         api_client=api_client,
     )

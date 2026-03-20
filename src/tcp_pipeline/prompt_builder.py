@@ -638,3 +638,174 @@ def build_slot_pipe_final_prompt(slot_pipe_layers: list[dict]) -> str:
         "## 表达材料（带例子的表述指令）\n"
         f"{expression_body}\n"
     )
+
+
+def build_slot_pipe_v4_checker_prompt(slot: dict, meta: dict) -> str:
+    slot_payload = {
+        "slot_name": str(slot.get("slot_name", "")).strip(),
+        "slot_term": str(slot.get("slot_term", "")).strip(),
+        "description_ref": str(slot.get("description", "")).strip(),
+    }
+    return (
+        "你是国画要素核验checker。\n"
+        "请结合图片，对当前slot给出0-5分（5分=图像中证据非常充分，0分=几乎无图像证据）。\n"
+        "注意：description仅作术语背景参考，不能当作图像事实。\n"
+        "请严格返回JSON：{\"score\": 0-5数字, \"reason\": \"简明图像证据\"}\n"
+        f"slot数据：{json.dumps(slot_payload, ensure_ascii=False, indent=2)}\n"
+        f"meta：{json.dumps(meta or {}, ensure_ascii=False)}\n"
+        "要求：\n"
+        "1) reason必须指向图像中可见证据\n"
+        "2) score支持小数，范围必须在0到5之间\n"
+        "2) 不允许输出JSON之外任何文字"
+    )
+
+
+def build_slot_pipe_v4_reviewer_prompt(slot: dict, checker_result: dict, meta: dict) -> str:
+    slot_payload = {
+        "slot_name": str(slot.get("slot_name", "")).strip(),
+        "slot_term": str(slot.get("slot_term", "")).strip(),
+        "description_ref": str(slot.get("description", "")).strip(),
+    }
+    return (
+        "你是国画领域专家reviewer。你将复核checker结论是否成立。\n"
+        "请结合图片、slot信息和checker分数，给出你的置信度（0-5，5=你非常确认该slot是有效鉴赏点）。\n"
+        "注意：description仅作术语背景参考，不能当作图像事实。\n"
+        "请严格返回JSON：{\"confidence\": 0-5数字, \"reason\": \"复核理由\", \"review_comment\": \"可选补充\"}\n"
+        f"slot数据：{json.dumps(slot_payload, ensure_ascii=False, indent=2)}\n"
+        f"checker结果：{json.dumps(checker_result or {}, ensure_ascii=False, indent=2)}\n"
+        f"meta：{json.dumps(meta or {}, ensure_ascii=False)}\n"
+        "要求：\n"
+        "1) confidence支持小数，范围必须在0到5之间\n"
+        "2) 如与你对checker结论不一致，明确说明冲突点\n"
+        "2) 不允许输出JSON之外任何文字"
+    )
+
+
+def build_slot_pipe_v4_content_prompt(slot: dict, verify_result: dict, meta: dict, agent_index: int) -> str:
+    slot_payload = {
+        "slot_name": str(slot.get("slot_name", "")).strip(),
+        "slot_term": str(slot.get("slot_term", "")).strip(),
+        "specific_questions": slot.get("specific_questions") if isinstance(slot.get("specific_questions"), list) else [],
+    }
+    return (
+        "你是内容要点层agent，请围绕当前slot产出可用于鉴赏写作的内容要点，并转成问题。\n"
+        "可使用通用艺术史与国画知识（可模拟web_search风格），但必须回扣当前图像可观察证据。\n"
+        "请严格返回JSON：\n"
+        "{\"content_points\": [\"...\"], \"questions\": [\"...？\"]}\n"
+        f"agent_index={agent_index}\n"
+        f"slot数据：{json.dumps(slot_payload, ensure_ascii=False, indent=2)}\n"
+        f"verify结果：{json.dumps(verify_result or {}, ensure_ascii=False, indent=2)}\n"
+        f"meta：{json.dumps(meta or {}, ensure_ascii=False)}\n"
+        "要求：\n"
+        "1) content_points给3-6条，强调“观察依据->鉴赏判断”\n"
+        "2) questions给3-6条，采用问题句式，能够激发推理\n"
+        "3) 不允许输出JSON之外任何文字"
+    )
+
+
+def build_slot_pipe_v4_guest_prompt(
+    slot: dict,
+    question: str,
+    previous_guest_rounds: list[dict],
+    guest_index: int,
+) -> str:
+    history = ""
+    if previous_guest_rounds:
+        blocks: list[str] = []
+        for item in previous_guest_rounds:
+            if not isinstance(item, dict):
+                continue
+            idx = int(item.get("guest_index", 0) or 0)
+            ans = str(item.get("answer", "")).strip()
+            insight = str(item.get("insight", "")).strip()
+            blocks.append(f"客人{idx}回答: {ans}\\n客人{idx}心得: {insight}")
+        history = "\n\n".join(blocks)
+
+    slot_payload = {
+        "slot_name": str(slot.get("slot_name", "")).strip(),
+        "slot_term": str(slot.get("slot_term", "")).strip(),
+    }
+
+    return (
+        "你在参加国画群赏。请结合图片，围绕指定slot问题给出回答与心得。\n"
+        "心得是你如何回答该问题的经验与提示，可供后续客人参考。\n"
+        "请严格返回JSON：{\"answer\": \"...\", \"insight\": \"...\"}\n"
+        f"当前客人序号：{guest_index}\n"
+        f"slot数据：{json.dumps(slot_payload, ensure_ascii=False, indent=2)}\n"
+        f"问题：{question}\n"
+        "前序客人内容（如有）：\n"
+        f"{history if history else '无'}\n"
+        "要求：\n"
+        "1) answer必须直接回答问题并体现图像依据\n"
+        "2) insight需可复用、可操作\n"
+        "3) 不允许输出JSON之外任何文字"
+    )
+
+
+def build_slot_pipe_v4_expression_summary_prompt(slot: dict, question: str, guest_rounds: list[dict]) -> str:
+    slot_payload = {
+        "slot_name": str(slot.get("slot_name", "")).strip(),
+        "slot_term": str(slot.get("slot_term", "")).strip(),
+    }
+    return (
+        "你是群赏汇总者。请对同一问题下多位客人的回答和心得做池化、降重、摘要。\n"
+        "请严格返回JSON：\n"
+        "{\"answer\": \"综合回答\", \"insights\": [\"心得1\", \"心得2\"], \"tips\": [\"表达提示1\", \"表达提示2\"]}\n"
+        f"slot数据：{json.dumps(slot_payload, ensure_ascii=False, indent=2)}\n"
+        f"问题：{question}\n"
+        f"客人轮次：{json.dumps(guest_rounds, ensure_ascii=False, indent=2)}\n"
+        "要求：\n"
+        "1) answer应综合但不重复\n"
+        "2) insights与tips分别保留2-5条\n"
+        "3) 不允许输出JSON之外任何文字"
+    )
+
+
+def build_slot_pipe_v4_final_prompt(final_slots: list[dict]) -> str:
+    if not final_slots:
+        return (
+            "请结合图片进行国画鉴赏。\n"
+            "当前没有可用的slot结构化结果，请直接基于画面进行客观、专业、克制的赏析。"
+        )
+
+    blocks: list[str] = []
+    for slot in final_slots:
+        if not isinstance(slot, dict):
+            continue
+        name = str(slot.get("slot_name", "")).strip() or "未命名slot"
+        term = str(slot.get("slot_term", "")).strip()
+        score = slot.get("slot_score")
+        confidence = slot.get("slot_confidence")
+        questions = slot.get("questions") if isinstance(slot.get("questions"), list) else []
+        expression_points = slot.get("expression_points") if isinstance(slot.get("expression_points"), list) else []
+
+        lines = [f"## {name}（{term or '无术语'}）"]
+        lines.append(f"- 鉴赏点占比信号（分/置信度）：score={score if score is not None else '0'} / confidence={confidence if confidence is not None else '0'}")
+        lines.append("- 内容问题（鉴赏文本中应尽量覆盖并回答）：")
+        for q in questions:
+            q_text = str(q).strip()
+            if q_text:
+                lines.append(f"  - {q_text}")
+        if not any(str(q).strip() for q in questions):
+            lines.append("  - 无")
+
+        lines.append("- 鉴赏表达要点（写作规范与表述要求）：")
+        for p in expression_points:
+            p_text = str(p).strip()
+            if p_text:
+                lines.append(f"  - {p_text}")
+        if not any(str(p).strip() for p in expression_points):
+            lines.append("  - 无")
+        blocks.append("\n".join(lines))
+
+    body = "\n\n".join(blocks) if blocks else "无"
+    return (
+        "你是国画鉴赏专家。最重要原则：必须先看图，再使用以下结构化信息作为辅助，禁止照抄。\n"
+        "下面每个slot都包含三类信息：\n"
+        "1) 分/置信度：表示该slot作为真鉴赏点在全文中的建议占比，分越高可分配更多篇幅。\n"
+        "2) 内容问题：是鉴赏中需要回答的问题。\n"
+        "3) 鉴赏表达要点：是写作时需要满足的规范与要求。\n"
+        "请输出完整、可读、专业且有图像依据的国画鉴赏文本。\n\n"
+        "### 结构化辅助信息\n"
+        f"{body}\n"
+    )

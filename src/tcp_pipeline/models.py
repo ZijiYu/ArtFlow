@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -25,3 +25,4 @@ class PipelineResult:
     token_usage: dict[str, int]
     api_logs: list[dict[str, Any]]
     logs: list[dict[str, Any]]
+    slot_pipe_v4: dict[str, Any] = field(default_factory=dict)

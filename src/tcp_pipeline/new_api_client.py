@@ -5,9 +5,12 @@ import json
 import mimetypes
 import os
 import socket
+import threading
+import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -33,17 +36,33 @@ class NewAPIClient:
     base_url: str | None = None
     model: str | None = None
     timeout: int = 60
+    _request_counter: int = 0
+    _log_lock: threading.Lock = field(init=False, repr=False, compare=False)
+    _counter_lock: threading.Lock = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         self.api_key = self.api_key or os.getenv("NEW_API_KEY")
         self.base_url = (self.base_url or os.getenv("NEW_API_BASE_URL") or "").rstrip("/")
         self.model = self.model or os.getenv("NEW_API_MODEL") or "qwen/qwen-2.5-vl-7b-instruct"
+        self._log_lock = threading.Lock()
+        self._counter_lock = threading.Lock()
         timeout_from_env = os.getenv("NEW_API_TIMEOUT")
         if timeout_from_env:
             try:
                 self.timeout = max(1, int(timeout_from_env))
             except ValueError:
                 pass
+
+    def _next_request_id(self) -> int:
+        with self._counter_lock:
+            self._request_counter += 1
+            return self._request_counter
+
+    def _log_api(self, request_id: int, phase: str, api_kind: str, detail: str) -> None:
+        now = datetime.now().strftime("%H:%M:%S")
+        line = f"[API][{now}][#{request_id:04d}][{api_kind}][{phase}] {detail}"
+        with self._log_lock:
+            print(line, flush=True)
 
     def _request_headers(self) -> dict[str, str]:
         return {
@@ -167,7 +186,10 @@ class NewAPIClient:
         image_path: str | None = None,
         model: str | None = None,
     ) -> ChatResult:
+        request_id = self._next_request_id()
+        started_at = time.perf_counter()
         model_used = model or self.model or ""
+        endpoint = self._endpoint() if self.base_url else ""
         request_summary = {
             "model": model_used,
             "temperature": temperature,
@@ -178,6 +200,12 @@ class NewAPIClient:
         }
 
         if not self.enabled:
+            self._log_api(
+                request_id,
+                "end",
+                "chat",
+                f"model={model_used} endpoint={endpoint or '-'} ok=False error=api_not_enabled elapsed_ms=0",
+            )
             return ChatResult(
                 content=None,
                 prompt_tokens=0,
@@ -185,7 +213,7 @@ class NewAPIClient:
                 total_tokens=0,
                 model=model_used,
                 error="api_not_enabled: missing NEW_API_KEY or NEW_API_BASE_URL",
-                endpoint=self._endpoint() if self.base_url else "",
+                endpoint=endpoint,
                 request_summary=request_summary,
                 response_summary={"error": "api_not_enabled"},
             )
@@ -210,10 +238,16 @@ class NewAPIClient:
         }
         body = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
-            url=self._endpoint(),
+            url=endpoint,
             data=body,
             headers=self._request_headers(),
             method="POST",
+        )
+        self._log_api(
+            request_id,
+            "start",
+            "chat",
+            f"model={model_used} endpoint={endpoint} timeout={self.timeout}s image_attached={image_attached}",
         )
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
@@ -227,6 +261,13 @@ class NewAPIClient:
                 output_text=content,
             )
             if not content:
+                elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+                self._log_api(
+                    request_id,
+                    "end",
+                    "chat",
+                    f"model={model_used} status={status_code} ok=False error=empty_content_in_response elapsed_ms={elapsed_ms}",
+                )
                 return ChatResult(
                     content=None,
                     prompt_tokens=prompt_tk,
@@ -234,7 +275,7 @@ class NewAPIClient:
                     total_tokens=total_tk,
                     model=model_used,
                     error="empty_content_in_response",
-                    endpoint=self._endpoint(),
+                    endpoint=endpoint,
                     status_code=status_code,
                     image_attached=image_attached,
                     request_summary=request_summary,
@@ -243,13 +284,20 @@ class NewAPIClient:
                         "has_choices": isinstance(parsed.get("choices"), list),
                     },
                 )
+            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+            self._log_api(
+                request_id,
+                "end",
+                "chat",
+                f"model={model_used} status={status_code} ok=True tokens={total_tk} elapsed_ms={elapsed_ms}",
+            )
             return ChatResult(
                 content=content,
                 prompt_tokens=prompt_tk,
                 completion_tokens=completion_tk,
                 total_tokens=total_tk,
                 model=model_used,
-                endpoint=self._endpoint(),
+                endpoint=endpoint,
                 status_code=status_code,
                 image_attached=image_attached,
                 request_summary=request_summary,
@@ -265,6 +313,13 @@ class NewAPIClient:
             except Exception:
                 err_body = ""
             reason = f"http_error {exc.code}: {err_body[:300]}".strip()
+            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+            self._log_api(
+                request_id,
+                "end",
+                "chat",
+                f"model={model_used} status={exc.code} ok=False error={reason} elapsed_ms={elapsed_ms}",
+            )
             return ChatResult(
                 content=None,
                 prompt_tokens=max(1, len(system_prompt + user_prompt) // 4),
@@ -272,13 +327,20 @@ class NewAPIClient:
                 total_tokens=max(1, len(system_prompt + user_prompt) // 4),
                 model=model_used,
                 error=reason,
-                endpoint=self._endpoint(),
+                endpoint=endpoint,
                 status_code=exc.code,
                 image_attached=image_attached,
                 request_summary=request_summary,
                 response_summary={"error_body_preview": self._brief(err_body)},
             )
         except urllib.error.URLError as exc:
+            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+            self._log_api(
+                request_id,
+                "end",
+                "chat",
+                f"model={model_used} status=- ok=False error=url_error:{exc.reason} elapsed_ms={elapsed_ms}",
+            )
             return ChatResult(
                 content=None,
                 prompt_tokens=max(1, len(system_prompt + user_prompt) // 4),
@@ -286,12 +348,19 @@ class NewAPIClient:
                 total_tokens=max(1, len(system_prompt + user_prompt) // 4),
                 model=model_used,
                 error=f"url_error: {exc.reason}",
-                endpoint=self._endpoint(),
+                endpoint=endpoint,
                 image_attached=image_attached,
                 request_summary=request_summary,
                 response_summary={"error": f"url_error: {exc.reason}"},
             )
         except (TimeoutError, socket.timeout):
+            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+            self._log_api(
+                request_id,
+                "end",
+                "chat",
+                f"model={model_used} status=- ok=False error=timeout_error elapsed_ms={elapsed_ms}",
+            )
             return ChatResult(
                 content=None,
                 prompt_tokens=max(1, len(system_prompt + user_prompt) // 4),
@@ -299,12 +368,19 @@ class NewAPIClient:
                 total_tokens=max(1, len(system_prompt + user_prompt) // 4),
                 model=model_used,
                 error=f"timeout_error: exceeded {self.timeout}s",
-                endpoint=self._endpoint(),
+                endpoint=endpoint,
                 image_attached=image_attached,
                 request_summary=request_summary,
                 response_summary={"error": f"timeout_error: exceeded {self.timeout}s"},
             )
         except json.JSONDecodeError as exc:
+            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+            self._log_api(
+                request_id,
+                "end",
+                "chat",
+                f"model={model_used} status=- ok=False error=json_decode_error elapsed_ms={elapsed_ms}",
+            )
             return ChatResult(
                 content=None,
                 prompt_tokens=max(1, len(system_prompt + user_prompt) // 4),
@@ -312,27 +388,36 @@ class NewAPIClient:
                 total_tokens=max(1, len(system_prompt + user_prompt) // 4),
                 model=model_used,
                 error=f"json_decode_error: {exc}",
-                endpoint=self._endpoint(),
+                endpoint=endpoint,
                 image_attached=image_attached,
                 request_summary=request_summary,
                 response_summary={"error": f"json_decode_error: {exc}"},
             )
 
     def embeddings(self, inputs: list[str], model: str | None = None) -> dict[str, Any]:
+        request_id = self._next_request_id()
+        started_at = time.perf_counter()
         clean_inputs = [str(x) for x in inputs if str(x).strip()]
         model_used = model or self.model or ""
+        endpoint = self._embeddings_endpoint() if self.base_url else ""
         request_summary = {
             "model": model_used,
             "input_size": len(clean_inputs),
         }
 
         if not clean_inputs:
+            self._log_api(
+                request_id,
+                "end",
+                "embeddings",
+                f"model={model_used} endpoint={endpoint or '-'} ok=True note=empty_input elapsed_ms=0",
+            )
             return {
                 "ok": True,
                 "vectors": [],
                 "model": model_used,
                 "error": None,
-                "endpoint": self._embeddings_endpoint() if self.base_url else "",
+                "endpoint": endpoint,
                 "status_code": None,
                 "prompt_tokens": 0,
                 "total_tokens": 0,
@@ -341,12 +426,18 @@ class NewAPIClient:
             }
 
         if not self.enabled:
+            self._log_api(
+                request_id,
+                "end",
+                "embeddings",
+                f"model={model_used} endpoint={endpoint or '-'} ok=False error=api_not_enabled elapsed_ms=0",
+            )
             return {
                 "ok": False,
                 "vectors": [],
                 "model": model_used,
                 "error": "api_not_enabled: missing NEW_API_KEY or NEW_API_BASE_URL",
-                "endpoint": self._embeddings_endpoint() if self.base_url else "",
+                "endpoint": endpoint,
                 "status_code": None,
                 "prompt_tokens": 0,
                 "total_tokens": 0,
@@ -361,10 +452,16 @@ class NewAPIClient:
         }
         body = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
-            url=self._embeddings_endpoint(),
+            url=endpoint,
             data=body,
             headers=self._request_headers(),
             method="POST",
+        )
+        self._log_api(
+            request_id,
+            "start",
+            "embeddings",
+            f"model={model_used} endpoint={endpoint} timeout={self.timeout}s input_size={len(clean_inputs)}",
         )
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
@@ -396,12 +493,19 @@ class NewAPIClient:
             total_tokens = int(usage.get("total_tokens", 0) or 0) if isinstance(usage, dict) else prompt_tokens
 
             ok = len(vectors) == len(clean_inputs) and all(len(v) > 0 for v in vectors)
+            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+            self._log_api(
+                request_id,
+                "end",
+                "embeddings",
+                f"model={model_used} status={status_code} ok={ok} tokens={total_tokens} elapsed_ms={elapsed_ms}",
+            )
             return {
                 "ok": ok,
                 "vectors": vectors,
                 "model": model_used,
                 "error": None if ok else "embedding_response_incomplete",
-                "endpoint": self._embeddings_endpoint(),
+                "endpoint": endpoint,
                 "status_code": status_code,
                 "prompt_tokens": prompt_tokens,
                 "total_tokens": total_tokens,
@@ -418,12 +522,19 @@ class NewAPIClient:
             except Exception:
                 err_body = ""
             reason = f"http_error {exc.code}: {err_body[:300]}".strip()
+            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+            self._log_api(
+                request_id,
+                "end",
+                "embeddings",
+                f"model={model_used} status={exc.code} ok=False error={reason} elapsed_ms={elapsed_ms}",
+            )
             return {
                 "ok": False,
                 "vectors": [],
                 "model": model_used,
                 "error": reason,
-                "endpoint": self._embeddings_endpoint(),
+                "endpoint": endpoint,
                 "status_code": exc.code,
                 "prompt_tokens": 0,
                 "total_tokens": 0,
@@ -431,12 +542,19 @@ class NewAPIClient:
                 "response_summary": {"error_body_preview": self._brief(err_body)},
             }
         except urllib.error.URLError as exc:
+            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+            self._log_api(
+                request_id,
+                "end",
+                "embeddings",
+                f"model={model_used} status=- ok=False error=url_error:{exc.reason} elapsed_ms={elapsed_ms}",
+            )
             return {
                 "ok": False,
                 "vectors": [],
                 "model": model_used,
                 "error": f"url_error: {exc.reason}",
-                "endpoint": self._embeddings_endpoint(),
+                "endpoint": endpoint,
                 "status_code": None,
                 "prompt_tokens": 0,
                 "total_tokens": 0,
@@ -444,12 +562,19 @@ class NewAPIClient:
                 "response_summary": {"error": f"url_error: {exc.reason}"},
             }
         except (TimeoutError, socket.timeout):
+            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+            self._log_api(
+                request_id,
+                "end",
+                "embeddings",
+                f"model={model_used} status=- ok=False error=timeout_error elapsed_ms={elapsed_ms}",
+            )
             return {
                 "ok": False,
                 "vectors": [],
                 "model": model_used,
                 "error": f"timeout_error: exceeded {self.timeout}s",
-                "endpoint": self._embeddings_endpoint(),
+                "endpoint": endpoint,
                 "status_code": None,
                 "prompt_tokens": 0,
                 "total_tokens": 0,
@@ -457,12 +582,19 @@ class NewAPIClient:
                 "response_summary": {"error": f"timeout_error: exceeded {self.timeout}s"},
             }
         except json.JSONDecodeError as exc:
+            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+            self._log_api(
+                request_id,
+                "end",
+                "embeddings",
+                f"model={model_used} status=- ok=False error=json_decode_error elapsed_ms={elapsed_ms}",
+            )
             return {
                 "ok": False,
                 "vectors": [],
                 "model": model_used,
                 "error": f"json_decode_error: {exc}",
-                "endpoint": self._embeddings_endpoint(),
+                "endpoint": endpoint,
                 "status_code": None,
                 "prompt_tokens": 0,
                 "total_tokens": 0,

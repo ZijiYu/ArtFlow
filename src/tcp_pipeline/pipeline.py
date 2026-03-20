@@ -22,6 +22,12 @@ from .prompt_builder import (
     build_slot_pipe_final_prompt,
     build_slot_pipe_layer_judge_prompt,
     build_slot_pipe_slot_judge_prompt,
+    build_slot_pipe_v4_checker_prompt,
+    build_slot_pipe_v4_content_prompt,
+    build_slot_pipe_v4_expression_summary_prompt,
+    build_slot_pipe_v4_final_prompt,
+    build_slot_pipe_v4_guest_prompt,
+    build_slot_pipe_v4_reviewer_prompt,
     build_solitary_first_prompt,
     build_solitary_reflection_prompt,
 )
@@ -43,11 +49,20 @@ class PipelineConfig:
     judge_model: str | None = None
     slot_pipe_agents_per_slot: int = 2
     slot_pipe_max_retries: int = 3
+    slot_pipe_version: int = 4
+    slot_pipe_slots_file: str | None = "artifacts/slots.jsonl"
+    slot_pipe_content_agents: int = 2
+    slot_pipe_expression_guests: int = 3
     agent_model: str | None = None
     embedding_model: str | None = None
     baseline_model: str | None = None
     enhanced_model: str | None = None
     final_appreciation_model: str | None = None
+    checker_model: str | None = None
+    reviewer_model: str | None = None
+    content_model: str | None = None
+    expression_guest_model: str | None = None
+    expression_summary_model: str | None = None
 
 
 class TcpPromptPipeline:
@@ -314,7 +329,595 @@ class TcpPromptPipeline:
             logs=logs,
         )
 
+    def _run_slot_pipe_v4(self, image_path: str, meta: dict | None = None) -> PipelineResult:
+        meta = meta or {}
+        slots_data = self._load_slot_pipe_v4_slots()
+        if self.config.slots:
+            wanted = {str(x).strip() for x in self.config.slots if str(x).strip()}
+            slots_data = [x for x in slots_data if str(x.get("slot_name", "")).strip() in wanted]
+
+        checker_model = self.config.checker_model or self.config.judge_model or self.config.agent_model
+        reviewer_model = self.config.reviewer_model or checker_model
+        content_model = self.config.content_model or self.config.agent_model or checker_model
+        guest_model = self.config.expression_guest_model or self.config.agent_model or content_model
+        summary_model = self.config.expression_summary_model or self.config.judge_model or guest_model
+        final_appreciation_model = (
+            self.config.final_appreciation_model
+            or self.config.enhanced_model
+            or self.config.baseline_model
+            or guest_model
+        )
+
+        content_agents = max(1, int(self.config.slot_pipe_content_agents or 1))
+        guest_count = max(1, int(self.config.slot_pipe_expression_guests or 1))
+        max_workers = max(1, min(8, len(slots_data) if slots_data else 1))
+
+        api_logs: list[dict] = []
+        logs: list[dict] = []
+        slot_pipe_layers: list[dict] = []
+        slot_order = [str(x.get("slot_name", "")).strip() for x in slots_data if str(x.get("slot_name", "")).strip()]
+        slot_rank = {name: idx for idx, name in enumerate(slot_order)}
+
+        # Layer 1: 要素确认（checker -> reviewer）
+        layer1: dict = {
+            "layer_index": 1,
+            "layer_name": "要素确认",
+            "layer_goal": "核验slot是否真实出现并值得进入鉴赏。",
+            "slots_before": [str(x.get("slot_name", "")).strip() for x in slots_data],
+            "slots": [],
+        }
+        verify_by_slot: dict[str, dict] = {}
+        slot_data_by_name: dict[str, dict] = {
+            str(x.get("slot_name", "")).strip(): x
+            for x in slots_data
+            if str(x.get("slot_name", "")).strip()
+        }
+        verified_slots: list[dict] = []
+
+        def _as_score_0_5(value: object) -> float:
+            try:
+                num = float(value)
+            except Exception:
+                return 0.0
+            if num < 0:
+                return 0.0
+            if num > 5:
+                return 5.0
+            return round(num, 2)
+
+        def _run_layer1_slot(slot: dict) -> tuple[str, dict, dict, list[dict], bool]:
+            slot_name = str(slot.get("slot_name", "")).strip()
+            if not slot_name:
+                return "", {}, {}, [], False
+            checker_prompt = build_slot_pipe_v4_checker_prompt(slot=slot, meta=meta)
+            checker_result = self.api_client.chat(
+                system_prompt="你是国画要素核验checker，请只返回JSON。",
+                user_prompt=checker_prompt,
+                temperature=0.1,
+                image_path=image_path,
+                model=checker_model,
+            )
+            checker_raw = (checker_result.content or "").strip()
+            checker_json = self._parse_json_object(checker_raw) or {}
+
+            checker_log = {
+                "stage": "slot_pipe_v4_layer1_checker",
+                "layer_index": 1,
+                "layer_name": "要素确认",
+                "slot": slot_name,
+                "agent_index": 1,
+                "attempt_index": 1,
+                "inference_kind": f"slot_pipe_v4_l1_{self._slug(slot_name)}_checker",
+                "model": checker_result.model,
+                "ok": bool(checker_result.content),
+                "error": checker_result.error,
+                "image_attached": checker_result.image_attached,
+                "prompt_tokens": checker_result.prompt_tokens,
+                "completion_tokens": checker_result.completion_tokens,
+                "total_tokens": checker_result.total_tokens,
+                "status_code": checker_result.status_code,
+                "endpoint": checker_result.endpoint,
+                "request_summary": checker_result.request_summary,
+                "response_summary": checker_result.response_summary,
+                "prompt_text": checker_prompt,
+                "response_text": checker_raw,
+                "parsed": checker_json,
+            }
+            self._track_text(f"slot_pipe_v4_l1_{slot_name}_checker_prompt", checker_prompt)
+            self._track_text(f"slot_pipe_v4_l1_{slot_name}_checker_analysis", checker_raw)
+            self._track_api_usage("slot_pipe_v4_layer1_checker", int(checker_result.total_tokens or 0))
+
+            reviewer_prompt = build_slot_pipe_v4_reviewer_prompt(slot=slot, checker_result=checker_json, meta=meta)
+            reviewer_result = self.api_client.chat(
+                system_prompt="你是国画领域专家reviewer，请只返回JSON。",
+                user_prompt=reviewer_prompt,
+                temperature=0.1,
+                image_path=image_path,
+                model=reviewer_model,
+            )
+            reviewer_raw = (reviewer_result.content or "").strip()
+            reviewer_json = self._parse_json_object(reviewer_raw) or {}
+
+            reviewer_log = {
+                "stage": "slot_pipe_v4_layer1_reviewer",
+                "layer_index": 1,
+                "layer_name": "要素确认",
+                "slot": slot_name,
+                "agent_index": 2,
+                "attempt_index": 1,
+                "inference_kind": f"slot_pipe_v4_l1_{self._slug(slot_name)}_reviewer",
+                "model": reviewer_result.model,
+                "ok": bool(reviewer_result.content),
+                "error": reviewer_result.error,
+                "image_attached": reviewer_result.image_attached,
+                "prompt_tokens": reviewer_result.prompt_tokens,
+                "completion_tokens": reviewer_result.completion_tokens,
+                "total_tokens": reviewer_result.total_tokens,
+                "status_code": reviewer_result.status_code,
+                "endpoint": reviewer_result.endpoint,
+                "request_summary": reviewer_result.request_summary,
+                "response_summary": reviewer_result.response_summary,
+                "prompt_text": reviewer_prompt,
+                "response_text": reviewer_raw,
+                "parsed": reviewer_json,
+            }
+            self._track_text(f"slot_pipe_v4_l1_{slot_name}_reviewer_prompt", reviewer_prompt)
+            self._track_text(f"slot_pipe_v4_l1_{slot_name}_reviewer_analysis", reviewer_raw)
+            self._track_api_usage("slot_pipe_v4_layer1_reviewer", int(reviewer_result.total_tokens or 0))
+
+            checker_score = _as_score_0_5(checker_json.get("score"))
+            checker_reason = str(checker_json.get("reason", "")).strip()
+            reviewer_confidence = _as_score_0_5(reviewer_json.get("confidence"))
+            final_reason = str(reviewer_json.get("reason", "")).strip() or checker_reason
+            final_verified = bool(checker_score > 0 or reviewer_confidence > 0)
+
+            verify_result: dict = {
+                "score": checker_score,
+                "confidence": reviewer_confidence,
+                "reason": final_reason,
+                "checker": checker_json,
+                "reviewer": reviewer_json,
+            }
+
+            layer_slot_record = {
+                "slot": slot_name,
+                "agent_attempts": [checker_log, reviewer_log],
+                "judge_rounds": [],
+                "final_points": [
+                    {
+                        "point": f"score={checker_score}; confidence={reviewer_confidence}; reason={final_reason}",
+                        "sources": [1, 2],
+                        "support": 2,
+                    }
+                ],
+                "verify_result": verify_result,
+            }
+            return slot_name, verify_result, layer_slot_record, [checker_log, reviewer_log], final_verified
+
+        layer1_results: list[tuple[str, dict, dict, list[dict], bool]] = []
+        layer1_slots = [x for x in slots_data if str(x.get("slot_name", "")).strip()]
+        if layer1_slots:
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                futures = [pool.submit(_run_layer1_slot, slot) for slot in layer1_slots]
+                for future in as_completed(futures):
+                    layer1_results.append(future.result())
+        layer1_results.sort(key=lambda x: slot_rank.get(x[0], 10**9))
+        for slot_name, verify_result, layer_slot_record, slot_api_logs, final_verified in layer1_results:
+            verify_by_slot[slot_name] = verify_result
+            layer1["slots"].append(layer_slot_record)
+            api_logs.extend(slot_api_logs)
+            if final_verified and slot_name in slot_data_by_name:
+                verified_slots.append(slot_data_by_name[slot_name])
+
+        # v4 keeps the slot set stable across layers; verification is a signal, not a filter.
+        layer1["slots_after"] = [str(x.get("slot_name", "")).strip() for x in slots_data]
+        slot_pipe_layers.append(layer1)
+
+        # Layer 2: 内容要点与问题生成
+        layer2: dict = {
+            "layer_index": 2,
+            "layer_name": "内容要点",
+            "layer_goal": "为每个slot提炼内容要点并转为问题。",
+            "slots_before": [str(x.get("slot_name", "")).strip() for x in slots_data],
+            "slots": [],
+        }
+        content_by_slot: dict[str, dict] = {}
+
+        def _run_layer2_slot(slot: dict) -> tuple[str, dict, dict, list[dict]]:
+            slot_name = str(slot.get("slot_name", "")).strip()
+            if not slot_name:
+                return "", {}, {}, []
+            slot_attempts: list[dict] = []
+            merged_points: list[str] = []
+            merged_questions: list[str] = []
+
+            for agent_index in range(1, content_agents + 1):
+                prompt = build_slot_pipe_v4_content_prompt(
+                    slot=slot,
+                    verify_result=verify_by_slot.get(slot_name, {}),
+                    meta=meta,
+                    agent_index=agent_index,
+                )
+                result = self.api_client.chat(
+                    system_prompt="你是内容要点层agent，请只返回JSON。",
+                    user_prompt=prompt,
+                    temperature=self.config.agent_temperature,
+                    image_path=image_path,
+                    model=content_model,
+                )
+                raw = (result.content or "").strip()
+                parsed = self._parse_json_object(raw) or {}
+
+                points = parsed.get("content_points") if isinstance(parsed.get("content_points"), list) else []
+                questions = parsed.get("questions") if isinstance(parsed.get("questions"), list) else []
+
+                for p in points:
+                    p_text = str(p).strip()
+                    if p_text:
+                        merged_points.append(p_text)
+                for q in questions:
+                    q_text = str(q).strip()
+                    if q_text:
+                        merged_questions.append(q_text)
+
+                attempt_log = {
+                    "stage": "slot_pipe_v4_layer2_content",
+                    "layer_index": 2,
+                    "layer_name": "内容要点",
+                    "slot": slot_name,
+                    "agent_index": agent_index,
+                    "attempt_index": 1,
+                    "inference_kind": f"slot_pipe_v4_l2_{self._slug(slot_name)}_a{agent_index}",
+                    "model": result.model,
+                    "ok": bool(result.content),
+                    "error": result.error,
+                    "image_attached": result.image_attached,
+                    "prompt_tokens": result.prompt_tokens,
+                    "completion_tokens": result.completion_tokens,
+                    "total_tokens": result.total_tokens,
+                    "status_code": result.status_code,
+                    "endpoint": result.endpoint,
+                    "request_summary": result.request_summary,
+                    "response_summary": result.response_summary,
+                    "prompt_text": prompt,
+                    "response_text": raw,
+                    "parsed": parsed,
+                }
+                slot_attempts.append(attempt_log)
+                self._track_text(f"slot_pipe_v4_l2_{slot_name}_a{agent_index}_prompt", prompt)
+                self._track_text(f"slot_pipe_v4_l2_{slot_name}_a{agent_index}_analysis", raw)
+                self._track_api_usage("slot_pipe_v4_layer2_content", int(result.total_tokens or 0))
+
+            default_questions = slot.get("specific_questions") if isinstance(slot.get("specific_questions"), list) else []
+            for q in default_questions:
+                q_text = str(q).strip()
+                if q_text:
+                    merged_questions.append(q_text)
+
+            dedup_points = self._dedupe_texts(merged_points, limit=8)
+            dedup_questions = self._dedupe_texts(merged_questions, limit=6)
+            if not dedup_questions and dedup_points:
+                dedup_questions = [f"{p}如何在画面中成立？" for p in dedup_points[:3]]
+
+            slot_content = {
+                "content_points": dedup_points,
+                "questions": dedup_questions,
+            }
+
+            layer_slot_record = {
+                "slot": slot_name,
+                "agent_attempts": slot_attempts,
+                "judge_rounds": [],
+                "final_points": [
+                    {"point": q, "sources": [x + 1 for x in range(len(slot_attempts))], "support": 1}
+                    for q in dedup_questions
+                ],
+                "content_points": dedup_points,
+                "questions": dedup_questions,
+            }
+            return slot_name, slot_content, layer_slot_record, slot_attempts
+
+        layer2_results: list[tuple[str, dict, dict, list[dict]]] = []
+        if slots_data:
+            with ThreadPoolExecutor(max_workers=max(1, min(max_workers, len(slots_data)))) as pool:
+                futures = [pool.submit(_run_layer2_slot, slot) for slot in slots_data]
+                for future in as_completed(futures):
+                    layer2_results.append(future.result())
+        layer2_results.sort(key=lambda x: slot_rank.get(x[0], 10**9))
+        for slot_name, slot_content, layer_slot_record, slot_api_logs in layer2_results:
+            if not slot_name:
+                continue
+            content_by_slot[slot_name] = slot_content
+            layer2["slots"].append(layer_slot_record)
+            api_logs.extend(slot_api_logs)
+
+        layer2["slots_after"] = list(content_by_slot.keys())
+        slot_pipe_layers.append(layer2)
+
+        # Layer 3: 群赏表达（按问题串行客人，再汇总）
+        layer3: dict = {
+            "layer_index": 3,
+            "layer_name": "鉴赏表达",
+            "layer_goal": "围绕问题做群赏回答与心得池化，形成可复用表达提示。",
+            "slots_before": [str(x.get("slot_name", "")).strip() for x in slots_data],
+            "slots": [],
+        }
+        final_slots: list[dict] = []
+
+        def _run_layer3_slot(slot: dict) -> tuple[str, dict, dict, list[dict]]:
+            slot_name = str(slot.get("slot_name", "")).strip()
+            if slot_name not in content_by_slot:
+                return "", {}, {}, []
+            questions = content_by_slot.get(slot_name, {}).get("questions") or []
+            slot_attempts: list[dict] = []
+            question_results: list[dict] = []
+            expression_points: list[str] = []
+
+            for q_idx, question in enumerate(questions, start=1):
+                guest_rounds: list[dict] = []
+                for guest_index in range(1, guest_count + 1):
+                    guest_prompt = build_slot_pipe_v4_guest_prompt(
+                        slot=slot,
+                        question=question,
+                        previous_guest_rounds=guest_rounds,
+                        guest_index=guest_index,
+                    )
+                    guest_result = self.api_client.chat(
+                        system_prompt="你是群赏客人，请只返回JSON。",
+                        user_prompt=guest_prompt,
+                        temperature=self.config.vlm_temperature,
+                        image_path=image_path,
+                        model=guest_model,
+                    )
+                    guest_raw = (guest_result.content or "").strip()
+                    guest_json = self._parse_json_object(guest_raw) or {}
+                    answer = str(guest_json.get("answer", "")).strip()
+                    insight = str(guest_json.get("insight", "")).strip()
+
+                    round_payload = {
+                        "guest_index": guest_index,
+                        "answer": answer,
+                        "insight": insight,
+                    }
+                    guest_rounds.append(round_payload)
+
+                    guest_log = {
+                        "stage": "slot_pipe_v4_layer3_guest",
+                        "layer_index": 3,
+                        "layer_name": "鉴赏表达",
+                        "slot": slot_name,
+                        "question_index": q_idx,
+                        "question": question,
+                        "agent_index": guest_index,
+                        "attempt_index": 1,
+                        "inference_kind": f"slot_pipe_v4_l3_{self._slug(slot_name)}_q{q_idx}_g{guest_index}",
+                        "model": guest_result.model,
+                        "ok": bool(guest_result.content),
+                        "error": guest_result.error,
+                        "image_attached": guest_result.image_attached,
+                        "prompt_tokens": guest_result.prompt_tokens,
+                        "completion_tokens": guest_result.completion_tokens,
+                        "total_tokens": guest_result.total_tokens,
+                        "status_code": guest_result.status_code,
+                        "endpoint": guest_result.endpoint,
+                        "request_summary": guest_result.request_summary,
+                        "response_summary": guest_result.response_summary,
+                        "prompt_text": guest_prompt,
+                        "response_text": guest_raw,
+                        "parsed": guest_json,
+                    }
+                    slot_attempts.append(guest_log)
+                    self._track_text(f"slot_pipe_v4_l3_{slot_name}_q{q_idx}_g{guest_index}_prompt", guest_prompt)
+                    self._track_text(f"slot_pipe_v4_l3_{slot_name}_q{q_idx}_g{guest_index}_analysis", guest_raw)
+                    self._track_api_usage("slot_pipe_v4_layer3_guest", int(guest_result.total_tokens or 0))
+
+                summary_prompt = build_slot_pipe_v4_expression_summary_prompt(
+                    slot=slot,
+                    question=question,
+                    guest_rounds=guest_rounds,
+                )
+                summary_result = self.api_client.chat(
+                    system_prompt="你是群赏汇总者，请只返回JSON。",
+                    user_prompt=summary_prompt,
+                    temperature=0.1,
+                    image_path=image_path,
+                    model=summary_model,
+                )
+                summary_raw = (summary_result.content or "").strip()
+                summary_json = self._parse_json_object(summary_raw) or {}
+                pooled_answer = str(summary_json.get("answer", "")).strip()
+                insights = self._dedupe_texts(summary_json.get("insights") if isinstance(summary_json.get("insights"), list) else [], limit=5)
+                tips = self._dedupe_texts(summary_json.get("tips") if isinstance(summary_json.get("tips"), list) else [], limit=5)
+                expression_points.extend(tips)
+
+                summary_log = {
+                    "stage": "slot_pipe_v4_layer3_summary",
+                    "layer_index": 3,
+                    "layer_name": "鉴赏表达",
+                    "slot": slot_name,
+                    "question_index": q_idx,
+                    "question": question,
+                    "agent_index": guest_count + 1,
+                    "attempt_index": 1,
+                    "inference_kind": f"slot_pipe_v4_l3_{self._slug(slot_name)}_q{q_idx}_summary",
+                    "model": summary_result.model,
+                    "ok": bool(summary_result.content),
+                    "error": summary_result.error,
+                    "image_attached": summary_result.image_attached,
+                    "prompt_tokens": summary_result.prompt_tokens,
+                    "completion_tokens": summary_result.completion_tokens,
+                    "total_tokens": summary_result.total_tokens,
+                    "status_code": summary_result.status_code,
+                    "endpoint": summary_result.endpoint,
+                    "request_summary": summary_result.request_summary,
+                    "response_summary": summary_result.response_summary,
+                    "prompt_text": summary_prompt,
+                    "response_text": summary_raw,
+                    "parsed": summary_json,
+                }
+                slot_attempts.append(summary_log)
+                self._track_text(f"slot_pipe_v4_l3_{slot_name}_q{q_idx}_summary_prompt", summary_prompt)
+                self._track_text(f"slot_pipe_v4_l3_{slot_name}_q{q_idx}_summary_analysis", summary_raw)
+                self._track_api_usage("slot_pipe_v4_layer3_summary", int(summary_result.total_tokens or 0))
+
+                question_results.append(
+                    {
+                        "question": question,
+                        "pooled_answer": pooled_answer,
+                        "insights": insights,
+                        "tips": tips,
+                        "guest_rounds": guest_rounds,
+                    }
+                )
+
+            verify_info = verify_by_slot.get(slot_name, {})
+            slot_expression_points = self._dedupe_texts(expression_points, limit=8)
+            final_slot_item = {
+                "slot_name": slot_name,
+                "slot_term": str(slot.get("slot_term", "")).strip(),
+                "slot_score": float(verify_info.get("score", 0.0) or 0.0),
+                "slot_confidence": float(verify_info.get("confidence", 0.0) or 0.0),
+                "questions": [str(x).strip() for x in (content_by_slot.get(slot_name, {}).get("questions", []) or []) if str(x).strip()],
+                "expression_points": slot_expression_points,
+            }
+
+            layer_slot_record = {
+                "slot": slot_name,
+                "agent_attempts": slot_attempts,
+                "judge_rounds": [],
+                "final_points": [
+                    {"point": t, "sources": [1], "support": 1}
+                    for t in slot_expression_points
+                ],
+                "question_results": question_results,
+            }
+            return slot_name, final_slot_item, layer_slot_record, slot_attempts
+
+        layer3_results: list[tuple[str, dict, dict, list[dict]]] = []
+        if slots_data:
+            with ThreadPoolExecutor(max_workers=max(1, min(max_workers, len(slots_data)))) as pool:
+                futures = [pool.submit(_run_layer3_slot, slot) for slot in slots_data]
+                for future in as_completed(futures):
+                    layer3_results.append(future.result())
+        layer3_results.sort(key=lambda x: slot_rank.get(x[0], 10**9))
+        for slot_name, final_slot_item, layer_slot_record, slot_api_logs in layer3_results:
+            if not slot_name:
+                continue
+            final_slots.append(final_slot_item)
+            layer3["slots"].append(layer_slot_record)
+            api_logs.extend(slot_api_logs)
+
+        layer3["slots_after"] = [str(x.get("slot_name", "")).strip() for x in final_slots]
+        slot_pipe_layers.append(layer3)
+
+        final_prompt = build_slot_pipe_v4_final_prompt(final_slots)
+        self._track_text("slot_pipe_v4_final_appreciation_prompt", final_prompt)
+        final_analysis, final_appreciation_log = self.vlm_runner.analyze(
+            image_path=image_path,
+            prompt=final_prompt,
+            temperature=self.config.vlm_temperature,
+            model=final_appreciation_model,
+            inference_kind="slot_pipe_v4_final_appreciation",
+        )
+        api_logs.append(final_appreciation_log)
+        self._track_text("slot_pipe_v4_final_appreciation_analysis", final_analysis)
+        self._track_api_usage("slot_pipe_v4_final_appreciation", int(final_appreciation_log.get("total_tokens", 0) or 0))
+
+        logs.append(
+            {
+                "mode": "slot_pipe",
+                "slot_pipe_version": 4,
+                "slots_file": self.config.slot_pipe_slots_file,
+                "slots_loaded": len(slots_data),
+                "slots_verified": len(verified_slots),
+                "content_agents": content_agents,
+                "expression_guests": guest_count,
+                "checker_model": checker_model,
+                "reviewer_model": reviewer_model,
+                "content_model": content_model,
+                "expression_guest_model": guest_model,
+                "expression_summary_model": summary_model,
+                "final_appreciation_model": final_appreciation_model,
+                "api_enabled": self.api_client.enabled,
+                "api_failures": [x for x in api_logs if not x.get("ok")],
+                "token_usage": self.tracker.snapshot(),
+                "v4_final_slots": final_slots,
+            }
+        )
+
+        final_slot_names = [str(x.get("slot_name", "")).strip() for x in final_slots if str(x.get("slot_name", "")).strip()]
+        return PipelineResult(
+            mode="slot_pipe",
+            selected_slots=final_slot_names,
+            slot_context={
+                str(x.get("slot_name", "")).strip(): "\n".join(f"- {t}" for t in (x.get("expression_points") or []) if str(t).strip())
+                for x in final_slots
+                if str(x.get("slot_name", "")).strip()
+            },
+            baseline_prompt="slot_pipe_v4_mode",
+            enhanced_prompt=final_prompt,
+            baseline_analysis="",
+            enhanced_analysis=final_analysis,
+            solitary_rounds=[],
+            communal_rounds=[],
+            slot_pipe_layers=slot_pipe_layers,
+            token_usage=self.tracker.snapshot(),
+            api_logs=api_logs,
+            logs=logs,
+            slot_pipe_v4={
+                "final_slots": final_slots,
+                "slots_file": self.config.slot_pipe_slots_file,
+            },
+        )
+
+    def _load_slot_pipe_v4_slots(self) -> list[dict]:
+        path = str(self.config.slot_pipe_slots_file or "artifacts/slots.jsonl").strip()
+        if not path:
+            return []
+        file_path = Path(path)
+        if not file_path.exists() or not file_path.is_file():
+            return []
+
+        slots: list[dict] = []
+        for raw_line in file_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            try:
+                item = json.loads(line)
+            except Exception:
+                continue
+            if not isinstance(item, dict):
+                continue
+            slot_name = str(item.get("slot_name", "")).strip()
+            if not slot_name:
+                continue
+            slots.append(item)
+        return slots
+
+    @staticmethod
+    def _dedupe_texts(items: object, limit: int = 8) -> list[str]:
+        if not isinstance(items, list):
+            return []
+        out: list[str] = []
+        seen: set[str] = set()
+        for item in items:
+            text = str(item).strip()
+            if not text:
+                continue
+            key = re.sub(r"\s+", "", text.lower())
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(text)
+            if len(out) >= max(1, int(limit or 1)):
+                break
+        return out
+
     def _run_slot_pipe(self, image_path: str, meta: dict | None = None) -> PipelineResult:
+        if int(self.config.slot_pipe_version or 4) >= 4:
+            return self._run_slot_pipe_v4(image_path=image_path, meta=meta)
+
         meta = meta or {}
         self._reset_embedding_api_logs()
         selected_slots = [slot_label(slot) for slot in normalize_slots(self.config.slots)]
@@ -1888,6 +2491,14 @@ class TcpPromptPipeline:
                 encoding="utf-8",
             )
             output_files["slot_pipe_final_points"] = str(final_points_path)
+
+            if result.slot_pipe_v4:
+                v4_payload_path = slot_pipe_dir / "v4_final_slots.json"
+                v4_payload_path.write_text(
+                    json.dumps(result.slot_pipe_v4, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+                output_files["slot_pipe_v4_final_slots"] = str(v4_payload_path)
 
         api_calls_path.write_text(
             "\n".join(
