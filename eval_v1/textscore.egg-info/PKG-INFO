@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: textscore
+Version: 0.1.0
+Summary: A TextGrad-inspired scoring-only experiment for long-context comparison.
+Requires-Python: >=3.11
+Requires-Dist: openai>=1.30.0
+Requires-Dist: pydantic>=2.7.0

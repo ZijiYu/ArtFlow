@@ -1,0 +1,13 @@
+README.md
+pyproject.toml
+tests/test_textscore.py
+textscore/__init__.py
+textscore/analyzer.py
+textscore/models.py
+textscore/render.py
+textscore/sentence_indexer.py
+textscore.egg-info/PKG-INFO
+textscore.egg-info/SOURCES.txt
+textscore.egg-info/dependency_links.txt
+textscore.egg-info/requires.txt
+textscore.egg-info/top_level.txt

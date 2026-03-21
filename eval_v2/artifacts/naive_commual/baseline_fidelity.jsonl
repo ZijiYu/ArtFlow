@@ -1,0 +1,14 @@
+{"term": "山水画", "category": "画种", "supported_by_ground_truth": true, "reason": "image_context_v中多次提到该画为山水画，且相关特征被明确描述（如高山、流水、空间感等），直接支持。"}
+{"term": "笔墨", "category": "技法", "supported_by_ground_truth": true, "reason": "image_context_v描述山石、树木的笔触细腻与层次感，并有‘雨点皴’、‘晕出如雾气般的墨彩’等具体笔墨表现。"}
+{"term": "线条", "category": "技法", "supported_by_ground_truth": true, "reason": "image_context_v明确描述‘山壁岩纹理历历可见，线条粗黑曲折’等线条表现，支持该术语。"}
+{"term": "高远", "category": "构图", "supported_by_ground_truth": true, "reason": "image_context_v明确描述‘远近侧正的视觉角度各有不同’，‘山峰高耸’等，体现高远构图。"}
+{"term": "深远", "category": "构图", "supported_by_ground_truth": true, "reason": "image_context_v描述‘流水下行至深谷’，‘空间感’，支持深远构图特征。"}
+{"term": "色彩", "category": "设色", "supported_by_ground_truth": true, "reason": "image_context_v提及‘浅淡的色彩作极为精致的构图’，‘近景枝干盘根错节，部分植物叶片仍留红绿痕迹，说明原作为彩色’，可支持。"}
+{"term": "气韵", "category": "画理", "supported_by_ground_truth": true, "reason": "image_context_v多处称‘空间感’‘雄伟厚重’‘气韵’，并有引用‘大气磅礡’，直接支持。"}
+{"term": "南宗山水", "category": "流派", "supported_by_ground_truth": false, "reason": "image_context_v未有关于南宗山水的明确表述，也未说受到该流派影响。"}
+{"term": "文人画", "category": "流派特征", "supported_by_ground_truth": false, "reason": "image_context_v未说明文人画特征，亦无相关评价信息。"}
+{"term": "题跋", "category": "题跋", "supported_by_ground_truth": true, "reason": "image_context_v‘印记题跋’板块详细列出题跋释文与题跋内容，直接支持。"}
+{"term": "印章", "category": "印章", "supported_by_ground_truth": true, "reason": "image_context_v详细列出22枚印章及内容，直接支持。"}
+{"term": "宣纸", "category": "材质", "supported_by_ground_truth": false, "reason": "image_context_v明确画作媒介为绢，无直接提到宣纸。"}
+{"term": "丝绸", "category": "材质", "supported_by_ground_truth": true, "reason": "image_context_v多次指出画作媒介为‘绢’或‘丝质的绢’，直接支持丝绸。"}
+{"term": "水墨", "category": "技法", "supported_by_ground_truth": true, "reason": "image_context_v媒介明示为水墨，并多次描述水墨表现特征。"}

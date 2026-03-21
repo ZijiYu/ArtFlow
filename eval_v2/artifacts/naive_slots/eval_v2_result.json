@@ -1,0 +1,649 @@
+{
+  "base_url": "https://api.zjuqx.cn/v1",
+  "embedding_model": "text-embedding-3-large",
+  "judge_model": "openai/gpt-4.1",
+  "duplicate_threshold": 0.83,
+  "slots_input": "# Slot Context (Human Readable)\n\n## tech\n- 画面的笔法细腻，山石的轮廓通过流畅的线条勾勒，展现了自然的力量与质感。\n- 皴法运用得当，石头的纹理与层次感显得尤为生动，增强了画面的立体感。\n- 墨法上，深浅的对比使得山体与水流之间形成了鲜明的层次，营造出一种深邃的氛围。\n- 设色上以淡雅的色调为主，既突出山水的自然之美，又不失古风韵味。\n- 留白技法巧妙，留出了呼吸的空间，使整幅画作既紧凑又不失宽广，给观者以思考的余地。\n\n\n## composition\n- 画面的布局层次分明，远近高低相互呼应，形成了一种自然的空间感。\n- 通过山石与水流的对比，虚实结合，增强了画面的立体感和动感。\n- 视线沿着山脉和河流的走势自然而然向远处延伸，带领观者探索更深的景致。\n- 细腻的笔法和浓淡相间的色调，赋予了画面节奏感，使得整体氛围既静谧又生动。\n- 画作的构图引导观者的目光，仿佛能感受到山水的气息，令人心旷神怡。\n\n\n## literary\n- 此图通过细致的山石描绘，展现了自然景观的雄伟与静谧，令人感受到大自然的力量与宁静。\n- 画中溪水蜿蜒而过，象征着生命的流动与时间的变迁，与周围的山石形成鲜明对比。\n- 印章与题跋的运用，增添了作品的文化背景与艺术深度，使观者更能体会到历史与现实的交融。\n- 诗文的搭配不仅丰富了画面的意境，还引导观者思考人与自然的关系，激发更深层的情感共鸣。\n- 整体构图和谐，细腻的笔触与留白的处理，使得整幅作品在视觉上既有张力又不失灵动之美。\n\n\n## aesthetic\n- 画面中的山石层次分明，气韵生动，展现了自然的雄伟与静谧。\n- 细致的笔触勾勒出树木与岩石，营造出一种深邃的意境，仿佛引领观者走入画中。\n- 整体色调温暖而柔和，传达出一种宁静悠远的情绪，让人心生向往。\n- 画作所传达的情绪张力在于山水之间的对比，既有磅礴的气势，又蕴含细腻的柔情。\n- 远山近水的布局巧妙，形成了视觉上的引导，仿佛在诉说一段流动的旅程。\n\n\n## material\n- 该作品使用了高质量的纸绢材质，展现出细腻的笔触和丰富的层次感。\n- 颜料的运用综合了传统的墨色与淡彩，使得画面既有深邃感又不失生动气息。\n- 画作的老化痕迹反映了岁月的流逝，增添了历史的厚重感，让观者感受到时间的沉淀。\n- 细致的山石和树木表现出艺术家对自然的深刻理解，透过材料的质感增强了画面的表现力。\n- 整体色调的温暖与柔和，使得观者在欣赏时产生一种宁静与舒适的体验。\n",
+  "slots_number": 5,
+  "slots_spec": [
+    {
+      "slot_name": "技法",
+      "description": "关注国画中表现山石、水流等景物时的笔法、皴法、墨法、色彩设色和留白等技法表现",
+      "covered_terms": [
+        "细腻笔法",
+        "皴法",
+        "墨法",
+        "设色",
+        "留白"
+      ]
+    },
+    {
+      "slot_name": "构图",
+      "description": "关注画面的空间布局、层次分明、远近高低、虚实结合和视线引导等构图方式",
+      "covered_terms": [
+        "空间感",
+        "层次布局",
+        "视线引导",
+        "虚实结合",
+        "节奏感"
+      ]
+    },
+    {
+      "slot_name": "文人意趣",
+      "description": "关注画面所表现的文化内涵、题跋诗文、象征意义及引发的情感共鸣与意境营造",
+      "covered_terms": [
+        "象征意义",
+        "题跋",
+        "诗文",
+        "历史现实交融",
+        "情感共鸣"
+      ]
+    },
+    {
+      "slot_name": "审美表达",
+      "description": "关注山水画传达的美学特质、氛围、气韵和情绪意境，包括色调和视觉引导等整体美感呈现",
+      "covered_terms": [
+        "气韵生动",
+        "审美意境",
+        "情绪张力",
+        "视觉引导",
+        "色调氛围"
+      ]
+    },
+    {
+      "slot_name": "材料工艺",
+      "description": "关注国画使用的材料（如纸绢、颜料）、保存状态及其对画面表现力的影响",
+      "covered_terms": [
+        "纸绢材质",
+        "墨色淡彩",
+        "老化痕迹",
+        "材料质感",
+        "层次表现"
+      ]
+    }
+  ],
+  "image_context_v": "# 谿山行旅图\n\n**英文名**: Travelers Among Mountains and Streams  \n**艺术家**: 范宽  \n**年份**: 北宋（10世纪末－11世纪初）  \n**媒介**: 绢  \n**流派**: 水墨画、山水画、界画  \n**尺寸**: 206.3 cm × 103.3 cm（81.2 英寸 × 40.7 英寸）  \n**定名**: 宋范宽谿山行旅图 轴  \n**收藏国家/地区**: 中华民国（台湾）  \n**收藏地**: 台北市士林区国立故宫博物院  \n**登录号**: 故画00082600000  \n**网址**: [国立故宫博物院书画典藏资料检索系统](https://www.npm.gov.tw/zh-TW/collection.aspx?Sno=00082600000)\n\n---\n\n## 画作简介\n《谿山行旅图》为五代末北宋初画家范宽的作品，使用丝质的绢作为画布，纵长206.3公分，横宽103.3公分。画作以浅淡的色彩作极为精致的构图，山川流水、高山岩石细致勾勒，呈现立体空间感。人物和马匹虽尺寸小，却栩栩如生。明代董其昌评价此画为“宋画第一”。现收藏于台北国立故宫博物院。\n\n---\n\n## 构图\n- 远近侧正的视觉角度各有不同，远看有巍峨巨石的壮阔，高山右侧垂注一缕涓瀑。\n- 山壁岩纹理历历可见，线条粗黑曲折，使山形雄伟厚重并呈现立体感。\n- 山壁上的雨点皴拉长了视觉高度，呈现范宽的典型绘画风格。\n- 流水下行至深谷，以细腻笔触晕出如雾气般的墨彩，米芾形容为“深暗如暮夜晦明”。\n- 近景每棵树枝叶皆描绘精细，右下角可见驴队，签名落款在“横Y”形枝干下方缺口处。\n- 山顶树木枝叶透光层次丰富，近景枝干盘根错节，部分植物叶片仍留红绿痕迹，说明原作为彩色。\n- 近景小瀑左岸挑担人头戴斗笠、动作生动，右下角驼队前进增加生物律动。\n\n---\n\n## 印记题跋\n《谿山行旅图》历经明、清文人墨士珍藏，印鉴多达22枚，其中清高宗有6枚。1958年由国立故宫博物院书画处技工牛性群与副院长李霖灿在右下骡队后方树丛发现“范宽”二字，确认为范宽所作。\n\n| 印主 | 标号 | 释文 |\n|------|------|------|\n| 金粟寺 | 8 | 金粟山藏经纸 |\n| 范宽 | 20 | 范宽 |\n| 钱惟演或钱勰 | 18 | 忠孝之家 |\n| 明代官印 | 21 | 典礼纪察司印 |\n| 董其昌 | 9 | 宗伯学士 |\n| 董其昌 | 10 | 董其昌印 |\n| 董其昌 | 11 | 题跋：“北宋范中立谿山行旅图，董其昌观” |\n| 梁清标 | 14 | 蕉林秘玩 |\n| 梁清标 | 15 | 观其大略 |\n| 周祚新 | 16 | 祚新之印 |\n| 周祚新 | 17 | 墨农鉴赏 |\n| 清高宗 | 1 | 石渠宝笈 |\n| 清高宗 | 2 | 重华宫鉴藏宝 |\n| 清高宗 | 7 | 乾隆御览之宝 |\n| 清高宗 | 12 | 乾隆御览之宝 |\n| 清高宗 | 13 | 乾隆御赏之宝 |\n| 清高宗 | 19 | 乐善堂图书记 |\n| 清仁宗 | 5 | 嘉庆御览之宝 |\n| 清宣统帝 | 3 | 宣统鉴赏 |\n| 清宣统帝 | 4 | 无逸斋精鉴玺 |\n| 清宣统帝 | 6 | 宣统御览之宝 |\n| 不明 | 22 | 东华山房 |\n\n---\n\n## 画评\n- 《图画见闻志》：“峰峦浑厚，势壮雄强”  \n- 《图绘宝鉴》：“山顶好作密林，水际作突兀大石”  \n- 《圣朝名画评》：“真石老树挺生笔下”  \n- 中国现代画家徐悲鸿：“中国所有之宝，故宫有二，吾所最倾倒者，则为范中立《谿山行旅图》，大气磅礡，沉雄高古，诚辟易万人之作。此幅既系巨帧，而一山头，几占全幅面积三分之二，章法突兀，使人咋舌。全幅整写，无一败笔，北宋人治艺之精，真令人拜倒。”\n\n---\n\n## 参考\n- 范宽《谿山行旅图》与郭熙《早春图》、李唐《万壑松风图》三件收藏于台北国立故宫博物院，被誉为“故宫三宝”。  \n- 《大观：北宋书画特展图录》，2006年，国立故宫博物院。 ISBN 9789575625047",
+  "context_baseline_metrics": {
+    "context_name": "context_baseline",
+    "sentence_count": 21,
+    "token_count": 480,
+    "similar_semantic_num": 0,
+    "duplicate_sentence_num": 0,
+    "unique_semantic_num": 21,
+    "term_num": 13,
+    "slots_match": 4,
+    "accuracy": 0.692308,
+    "duplicate_rate": 0.0,
+    "information_density": 0.04375,
+    "slot_coverage": 0.8,
+    "duplicate_clusters": [],
+    "terms": [
+      {
+        "term": "山水画",
+        "category": "画科/流派",
+        "detail": "画作为典型的山水画风格",
+        "sentence_ids": [
+          0
+        ],
+        "evidence_sentences": [
+          "这幅国画展现了典型的山水画风格，以下是从多个方面的赏析："
+        ]
+      },
+      {
+        "term": "笔墨",
+        "category": "技法",
+        "detail": "画作中的笔墨运用细腻，表现层次感",
+        "sentence_ids": [
+          1,
+          2
+        ],
+        "evidence_sentences": [
+          "### 笔墨",
+          "画作中的笔墨运用细腻，山石的轮廓和树木的枝叶都表现出丰富的层次感。"
+        ]
+      },
+      {
+        "term": "线条",
+        "category": "技法",
+        "detail": "线条流畅，体现对自然的细致观察与表现",
+        "sentence_ids": [
+          3
+        ],
+        "evidence_sentences": [
+          "线条流畅，体现了传统国画中对自然的细致观察与表现。"
+        ]
+      },
+      {
+        "term": "构图",
+        "category": "构图方式",
+        "detail": "整体构图采用了“高远”与“深远”的布局，形成前景与背景对比",
+        "sentence_ids": [
+          4,
+          5
+        ],
+        "evidence_sentences": [
+          "### 构图",
+          "整体构图采用了“高远”与“深远”的布局，山峰高耸，树木错落有致，形成了前景与背景的对比，增强了画面的空间感。"
+        ]
+      },
+      {
+        "term": "色彩",
+        "category": "设色",
+        "detail": "色彩运用以蓝色和暖色调为主，蓝色山体与橙色树干形成对比",
+        "sentence_ids": [
+          6,
+          7
+        ],
+        "evidence_sentences": [
+          "### 色彩",
+          "色彩运用上，画面以蓝色和暖色调为主，蓝色的山体与橙色的树干形成鲜明对比，营造出一种宁静而又神秘的氛围。"
+        ]
+      },
+      {
+        "term": "气韵",
+        "category": "画理",
+        "detail": "表现悠远气韵和空灵感，体现中国传统文化对自然的崇敬",
+        "sentence_ids": [
+          9,
+          10
+        ],
+        "evidence_sentences": [
+          "### 气韵",
+          "画作传达出一种悠远的气韵，山水之间的空灵感让人联想到自然的壮丽与宁静，体现了中国传统文化中对自然的崇敬与向往。"
+        ]
+      },
+      {
+        "term": "南宗山水",
+        "category": "流派",
+        "detail": "画作可能受到南宗山水流派影响，强调气韵生动与文人画特征",
+        "sentence_ids": [
+          12
+        ],
+        "evidence_sentences": [
+          "这幅画可能受到“南宗山水”流派的影响，强调自然景观的表现，注重气韵生动，体现了文人画的特征。"
+        ]
+      },
+      {
+        "term": "文人画",
+        "category": "流派/风格",
+        "detail": "流派特征体现文人画",
+        "sentence_ids": [
+          12
+        ],
+        "evidence_sentences": [
+          "这幅画可能受到“南宗山水”流派的影响，强调自然景观的表现，注重气韵生动，体现了文人画的特征。"
+        ]
+      },
+      {
+        "term": "题跋",
+        "category": "题跋",
+        "detail": "画作中可能有题跋，可提供作者及创作背景信息",
+        "sentence_ids": [
+          17
+        ],
+        "evidence_sentences": [
+          "如果画作中有题跋或印章，通常可以提供更多关于作者及其创作背景的信息，进一步丰富作品的内涵。"
+        ]
+      },
+      {
+        "term": "印章",
+        "category": "印章",
+        "detail": "画作中可能有印章，可提供作者及创作背景信息",
+        "sentence_ids": [
+          17
+        ],
+        "evidence_sentences": [
+          "如果画作中有题跋或印章，通常可以提供更多关于作者及其创作背景的信息，进一步丰富作品的内涵。"
+        ]
+      },
+      {
+        "term": "宣纸",
+        "category": "材质",
+        "detail": "传统国画一般使用宣纸",
+        "sentence_ids": [
+          19
+        ],
+        "evidence_sentences": [
+          "虽然无法直接观察材质，但传统国画一般使用宣纸或丝绸，结合水墨，能够呈现出独特的质感与效果。"
+        ]
+      },
+      {
+        "term": "丝绸",
+        "category": "材质",
+        "detail": "传统国画一般也可能使用丝绸",
+        "sentence_ids": [
+          19
+        ],
+        "evidence_sentences": [
+          "虽然无法直接观察材质，但传统国画一般使用宣纸或丝绸，结合水墨，能够呈现出独特的质感与效果。"
+        ]
+      },
+      {
+        "term": "水墨",
+        "category": "技法/材质",
+        "detail": "与宣纸或丝绸结合使用，呈现质感与效果",
+        "sentence_ids": [
+          19
+        ],
+        "evidence_sentences": [
+          "虽然无法直接观察材质，但传统国画一般使用宣纸或丝绸，结合水墨，能够呈现出独特的质感与效果。"
+        ]
+      }
+    ],
+    "slot_matches": [
+      {
+        "slot_name": "技法",
+        "matched_terms": [
+          "笔墨",
+          "线条",
+          "色彩",
+          "水墨"
+        ],
+        "matched_categories": [
+          "技法",
+          "技法",
+          "设色",
+          "技法/材质"
+        ],
+        "sentence_ids": [
+          1,
+          2,
+          3,
+          6,
+          7,
+          19
+        ],
+        "reason": "‘笔墨’和‘线条’属于 slots 定义中的笔法、墨法表现，‘色彩’属于设色，‘水墨’涉及墨法，与技法 slot 内容高度相关。"
+      },
+      {
+        "slot_name": "构图",
+        "matched_terms": [
+          "构图"
+        ],
+        "matched_categories": [
+          "构图方式"
+        ],
+        "sentence_ids": [
+          4,
+          5
+        ],
+        "reason": "‘构图’直接明确为构图方式，且描述了画面的空间布局与层次布局，命中 slot 定义。"
+      },
+      {
+        "slot_name": "文人意趣",
+        "matched_terms": [
+          "题跋"
+        ],
+        "matched_categories": [
+          "题跋"
+        ],
+        "sentence_ids": [
+          17
+        ],
+        "reason": "‘题跋’为 covered_terms，明确对应 slot ‘文人意趣’。"
+      },
+      {
+        "slot_name": "材料工艺",
+        "matched_terms": [
+          "宣纸",
+          "丝绸",
+          "水墨"
+        ],
+        "matched_categories": [
+          "材质",
+          "材质",
+          "技法/材质"
+        ],
+        "sentence_ids": [
+          19
+        ],
+        "reason": "‘宣纸’与‘丝绸’是纸绢材质的具体表现，‘水墨’与材料结合影响画面效果，符合 slot 对材料及材质的关注点。"
+      }
+    ],
+    "fidelity_records": [
+      {
+        "term": "山水画",
+        "category": "画科/流派",
+        "supported_by_ground_truth": true,
+        "reason": "视觉线索基准中明确将本作归属于山水画流派，多处提及其作为典型山水画的特征。"
+      },
+      {
+        "term": "笔墨",
+        "category": "技法",
+        "supported_by_ground_truth": true,
+        "reason": "视觉线索基准中详述了本作笔墨的细腻与层次，如岩石、树木等的笔触和皴法。"
+      },
+      {
+        "term": "线条",
+        "category": "技法",
+        "supported_by_ground_truth": true,
+        "reason": "基准提及山壁岩石的线条粗黑曲折，准确表现出线条技法。"
+      },
+      {
+        "term": "构图",
+        "category": "构图方式",
+        "supported_by_ground_truth": true,
+        "reason": "视觉线索中详细描述了构图布局，包括高远、深远及前景与背景对比。"
+      },
+      {
+        "term": "色彩",
+        "category": "设色",
+        "supported_by_ground_truth": false,
+        "reason": "视觉线索基准仅提及‘浅淡的色彩’，以及部分植物叶片‘红绿痕迹’，并无蓝色和暖色调主导的直接陈述或蓝、橙对比细节，无法直接支持。"
+      },
+      {
+        "term": "气韵",
+        "category": "画理",
+        "supported_by_ground_truth": true,
+        "reason": "视觉线索基准多处提及作品‘气韵’、‘空灵’，以及所体现的自然壮丽和文化崇敬。"
+      },
+      {
+        "term": "南宗山水",
+        "category": "流派",
+        "supported_by_ground_truth": false,
+        "reason": "视觉线索基准未提及南宗山水影响，该流派特征无直接证据指向本作受其影响。"
+      },
+      {
+        "term": "文人画",
+        "category": "流派/风格",
+        "supported_by_ground_truth": false,
+        "reason": "视觉线索基准未直接提及文人画或文人画特征，仅以画家名与历史评论为线索，缺乏明确信息。"
+      },
+      {
+        "term": "题跋",
+        "category": "题跋",
+        "supported_by_ground_truth": true,
+        "reason": "视觉线索基准详列了题跋内容——包括董其昌等多位藏家题跋，可直接佐证。"
+      },
+      {
+        "term": "印章",
+        "category": "印章",
+        "supported_by_ground_truth": true,
+        "reason": "基准列举了详细印章信息（共22枚），与印章相关细节直接展现。"
+      },
+      {
+        "term": "宣纸",
+        "category": "材质",
+        "supported_by_ground_truth": false,
+        "reason": "视觉线索基准清楚标明本作媒介为‘绢’，未言用宣纸，不能支持宣纸。"
+      },
+      {
+        "term": "丝绸",
+        "category": "材质",
+        "supported_by_ground_truth": true,
+        "reason": "基准提到媒介为‘绢’，即丝绸材质，有直接描述。"
+      },
+      {
+        "term": "水墨",
+        "category": "技法/材质",
+        "supported_by_ground_truth": true,
+        "reason": "视觉线索标明本作为‘水墨画’，并多次描述水墨技法与效果，直接支持。"
+      }
+    ],
+    "duplicate_clusters_jsonl": "/Users/ken/MM/Pipeline/eval_v2/artifacts/baseline_duplicate_clusters.jsonl",
+    "terms_jsonl": "/Users/ken/MM/Pipeline/eval_v2/artifacts/baseline_terms.jsonl",
+    "slot_matches_jsonl": "/Users/ken/MM/Pipeline/eval_v2/artifacts/baseline_slot_matches.jsonl",
+    "fidelity_jsonl": "/Users/ken/MM/Pipeline/eval_v2/artifacts/baseline_fidelity.jsonl"
+  },
+  "context_enhanced_metrics": {
+    "context_name": "context_enhanced",
+    "sentence_count": 32,
+    "token_count": 887,
+    "similar_semantic_num": 0,
+    "duplicate_sentence_num": 0,
+    "unique_semantic_num": 32,
+    "term_num": 8,
+    "slots_match": 5,
+    "accuracy": 1.0,
+    "duplicate_rate": 0.0,
+    "information_density": 0.036077,
+    "slot_coverage": 1.0,
+    "duplicate_clusters": [],
+    "terms": [
+      {
+        "term": "山水画",
+        "category": "流派/画种",
+        "detail": "文本明确指出作品为中国山水画，展现了山水画的典雅与深邃",
+        "sentence_ids": [
+          0,
+          20
+        ],
+        "evidence_sentences": [
+          "这幅国画展现了中国传统山水画的精髓，整体构图与色彩运用都极具艺术魅力。",
+          "这幅画通过细致的线条和色彩对比，展现了中国山水画的典雅与深邃。"
+        ]
+      },
+      {
+        "term": "构图",
+        "category": "构图",
+        "detail": "文本多次提及构图方式，如高低错落、平衡而不对称，远近高低错落有致",
+        "sentence_ids": [
+          4,
+          6,
+          9,
+          22
+        ],
+        "evidence_sentences": [
+          "细致的笔法体现了中国传统山水画的工整与灵动，整体布局合理，远近高低错落有致，充分展现了空间的深度与广度。",
+          "画面采用高低错落的构图，增强了视觉的深度与空间感。",
+          "整体构图平衡而不对称，传达出自然界的活力与宁静。",
+          "整体构图稳重而富有变化，增添了画作的艺术魅力。"
+        ]
+      },
+      {
+        "term": "笔墨",
+        "category": "技法",
+        "detail": "文本明确描述作品笔墨运用流畅自然，体现出艺术技巧",
+        "sentence_ids": [
+          2
+        ],
+        "evidence_sentences": [
+          "画面中的笔墨运用流畅自然，山体的线条勾勒出丰富的层次感，展现出大自然的雄伟与静谧。"
+        ]
+      },
+      {
+        "term": "笔法",
+        "category": "技法",
+        "detail": "体现为细致的笔法，表现工整与灵动",
+        "sentence_ids": [
+          4
+        ],
+        "evidence_sentences": [
+          "细致的笔法体现了中国传统山水画的工整与灵动，整体布局合理，远近高低错落有致，充分展现了空间的深度与广度。"
+        ]
+      },
+      {
+        "term": "色彩运用",
+        "category": "设色",
+        "detail": "描述为蓝色与暖黄色的对比，形成强烈的视觉冲击力，体现了国画色彩韵味",
+        "sentence_ids": [
+          11,
+          12,
+          13,
+          14
+        ],
+        "evidence_sentences": [
+          "主色调为蓝色与暖黄色的对比，形成强烈的视觉冲击力，给人以清新而宁静的感觉。",
+          "蓝色的山峦与森林在色彩上营造出层次感，仿佛在描绘远近不同的空间。",
+          "暖黄色的背景则为画面增添了温暖的氛围，巧妙地平衡了冷色调的强烈感。",
+          "整体色彩运用既有传统的国画韵味，又不失现代的艺术表现，体现了创新与传承的结合。"
+        ]
+      },
+      {
+        "term": "气韵",
+        "category": "美学思想",
+        "detail": "文本指出山水描绘展现出浓厚的气韵，体现自然的灵动与和谐",
+        "sentence_ids": [
+          16,
+          18
+        ],
+        "evidence_sentences": [
+          "作品中的山水描绘展现出浓厚的气韵，体现了自然的灵动与和谐，令人感受到一种宁静的力量。",
+          "整体构图流畅而富有节奏，仿佛在诉说着一段自然的故事，令人沉浸其中，感受气韵之美。"
+        ]
+      },
+      {
+        "term": "题跋",
+        "category": "题跋印章",
+        "detail": "文本谈到虽未显示，但题跋部分通常承载画家情感表达及作品理解",
+        "sentence_ids": [
+          27
+        ],
+        "evidence_sentences": [
+          "虽然画面中未显示题跋印章，但题跋部分通常承载了画家的情感表达及其对作品的理解，能够为观者提供更深层的文化背景，增加作品的历史厚度。"
+        ]
+      },
+      {
+        "term": "材质",
+        "category": "材质",
+        "detail": "文本提及色彩展现出不同材质的质感，蓝色山体和黄色背景质感不同，强调材质对比与协调",
+        "sentence_ids": [
+          29,
+          30
+        ],
+        "evidence_sentences": [
+          "画面中的色彩运用展现了不同材质的质感，蓝色的山体和黄色的背景形成鲜明对比，增强了视觉冲击力。",
+          "整体构图中，材质的对比与协调，营造出和谐的自然氛围，让观者感受到山水的灵动与静谧。"
+        ]
+      }
+    ],
+    "slot_matches": [
+      {
+        "slot_name": "技法",
+        "matched_terms": [
+          "笔墨",
+          "笔法"
+        ],
+        "matched_categories": [
+          "技法",
+          "技法"
+        ],
+        "sentence_ids": [
+          2,
+          4
+        ],
+        "reason": "‘笔墨’与‘笔法’均为技法类术语，符合描述中笔法、墨法的范畴，关注表现手法。"
+      },
+      {
+        "slot_name": "构图",
+        "matched_terms": [
+          "构图"
+        ],
+        "matched_categories": [
+          "构图"
+        ],
+        "sentence_ids": [
+          4,
+          6,
+          9,
+          22
+        ],
+        "reason": "‘构图’术语与 slot 中的‘构图’和空间布局直接对应，涉及整体空间、平衡、远近高低等。"
+      },
+      {
+        "slot_name": "文人意趣",
+        "matched_terms": [
+          "题跋"
+        ],
+        "matched_categories": [
+          "题跋印章"
+        ],
+        "sentence_ids": [
+          27
+        ],
+        "reason": "‘题跋’为文人意趣 slot 中的 covered term，体现文化内涵与作品的精神延伸。"
+      },
+      {
+        "slot_name": "审美表达",
+        "matched_terms": [
+          "气韵"
+        ],
+        "matched_categories": [
+          "美学思想"
+        ],
+        "sentence_ids": [
+          16,
+          18
+        ],
+        "reason": "‘气韵’与‘气韵生动’同属美学意涵，关注画面的气韵与情绪氛围表现，契合该 slot。"
+      },
+      {
+        "slot_name": "材料工艺",
+        "matched_terms": [
+          "材质"
+        ],
+        "matched_categories": [
+          "材质"
+        ],
+        "sentence_ids": [
+          29,
+          30
+        ],
+        "reason": "‘材质’在 slot 的材料工艺范畴（如纸绢材质、材料质感等）之内，关注不同材质质感对画面影响。"
+      }
+    ],
+    "fidelity_records": [
+      {
+        "term": "山水画",
+        "category": "流派/画种",
+        "supported_by_ground_truth": true,
+        "reason": "image_context_v多次直接表述本作为山水画，包括“流派: 水墨画、山水画、界画”及多处详述山水画特征，直接支持该术语。"
+      },
+      {
+        "term": "构图",
+        "category": "构图",
+        "supported_by_ground_truth": true,
+        "reason": "image_context_v详细描述了构图方式（如远近高低错落有致、平衡而不对称），并专设“构图”段落直接对应术语。"
+      },
+      {
+        "term": "笔墨",
+        "category": "技法",
+        "supported_by_ground_truth": true,
+        "reason": "image_context_v多次强调‘细腻笔触’、‘山壁岩纹理’、‘雨点皴’和用墨表现，明确支持笔墨技法的描述。"
+      },
+      {
+        "term": "笔法",
+        "category": "技法",
+        "supported_by_ground_truth": true,
+        "reason": "原文‘山壁岩纹理历历可见，线条粗黑曲折，使山形雄伟厚重并呈现立体感’和‘雨点皴’，明确展现笔法特征。"
+      },
+      {
+        "term": "色彩运用",
+        "category": "设色",
+        "supported_by_ground_truth": true,
+        "reason": "image_context_v提及‘浅淡的色彩’、‘部分植物叶片仍留红绿痕迹，说明原作为彩色’，并详细描述原作运用设色，支持该术语。"
+      },
+      {
+        "term": "气韵",
+        "category": "美学思想",
+        "supported_by_ground_truth": true,
+        "reason": "‘呈现立体空间感’、‘明代董其昌评价此画为“宋画第一”’以及画评中的“大气磅礡，沉雄高古”等，均论及画作气韵生动，直接支持该术语。"
+      },
+      {
+        "term": "题跋",
+        "category": "题跋印章",
+        "supported_by_ground_truth": true,
+        "reason": "image_context_v‘印记题跋’板块详细列出历代题跋、印记内容（含董其昌等跋文），完全支持该术语。"
+      },
+      {
+        "term": "材质",
+        "category": "材质",
+        "supported_by_ground_truth": true,
+        "reason": "image_context_v‘媒介: 绢’和‘使用丝质的绢作为画布’直接表述了材质，支持相关术语。"
+      }
+    ],
+    "duplicate_clusters_jsonl": "/Users/ken/MM/Pipeline/eval_v2/artifacts/enhanced_duplicate_clusters.jsonl",
+    "terms_jsonl": "/Users/ken/MM/Pipeline/eval_v2/artifacts/enhanced_terms.jsonl",
+    "slot_matches_jsonl": "/Users/ken/MM/Pipeline/eval_v2/artifacts/enhanced_slot_matches.jsonl",
+    "fidelity_jsonl": "/Users/ken/MM/Pipeline/eval_v2/artifacts/enhanced_fidelity.jsonl"
+  },
+  "final_judgment": {
+    "winner": "context_enhanced",
+    "textual_loss_for": "context_baseline",
+    "reasoning": "文本B（context_enhanced）在专业Slot覆盖率和术语准确度上均达到100%，所有核心视觉线索和术语（如构图、笔墨、色彩、气韵、题跋、材质等）均被精准完整覆盖，且专业表达层次清晰，无冗余和遗漏。相比之下，文本A（context_baseline）尽管语义重复率为0，但专业Slot覆盖率和术语准确度都低于文本B，遗漏了部分核心术语（如笔法与色彩运用等相关细节），且部分描述存在对原画视觉线索的误读并包含未经基准支持的内容，因此整体专业性不及文本B。",
+    "textual_loss": "文本A未覆盖全部视觉线索和专业术语，如未清楚区分或细化‘笔墨’与‘笔法’、忽略了对设色细节的严谨描述，部分术语（如南宗山水、文人画、宣纸等）缺乏视觉证据支持而擅自引入，与视觉线索基准不符。此外，‘色彩运用’描述错误，基准未强调蓝色和暖色调主导，未准确反映原作真实用色。对于画面具体的材质（绢）、印章与题跋信息虽有覆盖，但表述笼统部分未能充分对齐基准中的细致条目，导致 Slot 覆盖和 fidelity 均不如文本B。"
+  },
+  "output_dir": "/Users/ken/MM/Pipeline/eval_v2/artifacts",
+  "result_json_path": "/Users/ken/MM/Pipeline/eval_v2/artifacts/eval_v2_result.json",
+  "llm_tokens": 26410
+}

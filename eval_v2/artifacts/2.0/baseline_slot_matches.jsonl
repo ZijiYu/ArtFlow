@@ -1,0 +1,5 @@
+{"slot_name": "技法", "matched_terms": ["笔墨", "传统技法", "墨色层层推进"], "matched_categories": ["技法", "技法", "技法/表现手法"], "sentence_ids": [1, 2, 3, 12, 15, 22], "reason": "‘笔墨’、‘传统技法’和‘墨色层层推进’均直接涉及国画的笔法、墨法、层次等技法细节表现，与 slot 中列举的‘细腻笔法’‘墨法’‘层次’等相符。"}
+{"slot_name": "构图", "matched_terms": ["构图", "前景、中景、远景", "墨色层层推进"], "matched_categories": ["构图", "构图要素", "技法/表现手法"], "sentence_ids": [4, 5, 24, 25, 22], "reason": "‘构图’与‘前景、中景、远景’直接对应 slot 的构图相关术语，‘墨色层层推进’体现了空间感；符合 slot 对布局层次、空间感等的要求。"}
+{"slot_name": "文意", "matched_terms": ["题跋", "印章（印鉴）", "收藏流传信息"], "matched_categories": ["题跋", "印章", "流传/收藏"], "sentence_ids": [17, 27, 28], "reason": "‘题跋’、‘印章（印鉴）’和‘收藏流传信息’都在 slot 的 covered_terms 列表（‘题跋’‘印章’）或与‘文化背景’‘历史文化背景’等相关，对画面文意有补充和强化。"}
+{"slot_name": "审美", "matched_terms": ["气韵"], "matched_categories": ["美学概念"], "sentence_ids": [9, 10], "reason": "‘气韵’正对应 slot 审美中的‘气韵生动’之类的心理感受和美学特征。"}
+{"slot_name": "材质", "matched_terms": ["宣纸", "水墨", "合成材料"], "matched_categories": ["材质", "材质/设色", "材质"], "sentence_ids": [19], "reason": "‘宣纸’、‘水墨’、‘合成材料’均属于国画的基础材料范畴，与 slot covered_terms 中的‘纸绢’‘墨色’等直接相关。"}

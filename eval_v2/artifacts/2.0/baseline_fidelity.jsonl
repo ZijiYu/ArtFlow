@@ -1,0 +1,14 @@
+{"term": "山水画", "category": "流派/类型", "supported_by_ground_truth": true, "reason": "image_context_v明确指出本作为山水画，并描述其北宋山水画特征，以及直接使用流派‘山水画’术语。"}
+{"term": "笔墨", "category": "技法", "supported_by_ground_truth": false, "reason": "image_context_v未直接描述‘笔墨’或其表现，仅间接涉及‘山壁岩纹’‘雨点皴’等技法描述，不足以直接支持‘笔墨’术语。"}
+{"term": "构图", "category": "构图", "supported_by_ground_truth": true, "reason": "image_context_v多处对本作构图进行直接描述，包括近景、远景、空间感、元素分布等内容，直接支持‘构图’术语。"}
+{"term": "色彩", "category": "设色", "supported_by_ground_truth": true, "reason": "image_context_v描述作品使用浅淡色彩、原作留红绿痕迹、表现如雾气般墨彩等，直接体现‘色彩’和设色内容。"}
+{"term": "气韵", "category": "美学概念", "supported_by_ground_truth": false, "reason": "image_context_v未直接出现‘气韵’或相关该词的明确表述。虽然提及空间感和气势，但并未明确提及‘气韵’或等效词。"}
+{"term": "传统技法", "category": "技法", "supported_by_ground_truth": true, "reason": "image_context_v详细介绍‘雨点皴’、‘线条粗黑曲折’等典型的传统技法，并指明‘范宽的典型绘画风格’，直接体现传统技法的应用。"}
+{"term": "题跋", "category": "题跋", "supported_by_ground_truth": true, "reason": "image_context_v明确定义‘印记题跋’，并详细列出题跋释文和归属，直接支持‘题跋’术语。"}
+{"term": "印章（印鉴）", "category": "印章", "supported_by_ground_truth": true, "reason": "image_context_v有详细印章列表、释文与归属说明，直接支持‘印章（印鉴）’术语。"}
+{"term": "收藏流传信息", "category": "流传/收藏", "supported_by_ground_truth": true, "reason": "image_context_v提供了收藏单位、地区、流传经过、印主信息等，充分支持‘收藏流传信息’。"}
+{"term": "宣纸", "category": "材质", "supported_by_ground_truth": false, "reason": "image_context_v只明确提到使用‘绢’为材料，未有任何‘宣纸’相关内容。"}
+{"term": "水墨", "category": "材质/设色", "supported_by_ground_truth": true, "reason": "image_context_v多次标明‘水墨画’为流派，说明该作以水墨为主要材料表现。"}
+{"term": "合成材料", "category": "材质", "supported_by_ground_truth": false, "reason": "image_context_v未有‘合成材料’描述，仅称绢本为载体。"}
+{"term": "前景、中景、远景", "category": "构图要素", "supported_by_ground_truth": true, "reason": "image_context_v明确描述近景（前景）、深谷（中景）、高山（远景）、远近空间等景别安排，支持该术语。"}
+{"term": "墨色层层推进", "category": "技法/表现手法", "supported_by_ground_truth": false, "reason": "image_context_v描述云雾、空间感、立体性和皴法，但没有直接提及‘墨色层层推进’的表现方法。"}

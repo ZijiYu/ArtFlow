@@ -1,0 +1,13 @@
+{"term": "山水画", "category": "画科/流派", "supported_by_ground_truth": true, "reason": "视觉线索基准中明确将本作归属于山水画流派，多处提及其作为典型山水画的特征。"}
+{"term": "笔墨", "category": "技法", "supported_by_ground_truth": true, "reason": "视觉线索基准中详述了本作笔墨的细腻与层次，如岩石、树木等的笔触和皴法。"}
+{"term": "线条", "category": "技法", "supported_by_ground_truth": true, "reason": "基准提及山壁岩石的线条粗黑曲折，准确表现出线条技法。"}
+{"term": "构图", "category": "构图方式", "supported_by_ground_truth": true, "reason": "视觉线索中详细描述了构图布局，包括高远、深远及前景与背景对比。"}
+{"term": "色彩", "category": "设色", "supported_by_ground_truth": false, "reason": "视觉线索基准仅提及‘浅淡的色彩’，以及部分植物叶片‘红绿痕迹’，并无蓝色和暖色调主导的直接陈述或蓝、橙对比细节，无法直接支持。"}
+{"term": "气韵", "category": "画理", "supported_by_ground_truth": true, "reason": "视觉线索基准多处提及作品‘气韵’、‘空灵’，以及所体现的自然壮丽和文化崇敬。"}
+{"term": "南宗山水", "category": "流派", "supported_by_ground_truth": false, "reason": "视觉线索基准未提及南宗山水影响，该流派特征无直接证据指向本作受其影响。"}
+{"term": "文人画", "category": "流派/风格", "supported_by_ground_truth": false, "reason": "视觉线索基准未直接提及文人画或文人画特征，仅以画家名与历史评论为线索，缺乏明确信息。"}
+{"term": "题跋", "category": "题跋", "supported_by_ground_truth": true, "reason": "视觉线索基准详列了题跋内容——包括董其昌等多位藏家题跋，可直接佐证。"}
+{"term": "印章", "category": "印章", "supported_by_ground_truth": true, "reason": "基准列举了详细印章信息（共22枚），与印章相关细节直接展现。"}
+{"term": "宣纸", "category": "材质", "supported_by_ground_truth": false, "reason": "视觉线索基准清楚标明本作媒介为‘绢’，未言用宣纸，不能支持宣纸。"}
+{"term": "丝绸", "category": "材质", "supported_by_ground_truth": true, "reason": "基准提到媒介为‘绢’，即丝绸材质，有直接描述。"}
+{"term": "水墨", "category": "技法/材质", "supported_by_ground_truth": true, "reason": "视觉线索标明本作为‘水墨画’，并多次描述水墨技法与效果，直接支持。"}

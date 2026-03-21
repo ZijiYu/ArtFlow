@@ -1,0 +1,9 @@
+{"term": "笔墨", "category": "技法", "supported_by_ground_truth": true, "reason": "视觉线索基准多次提到画作的笔墨运用及山体线条刻画，如“山壁岩纹理历历可见，线条粗黑曲折”、“画面中的笔墨运用流畅自然，山体的线条勾勒出丰富的层次感”，直接支持该术语。"}
+{"term": "线条", "category": "笔法", "supported_by_ground_truth": true, "reason": "视觉线索基准详细描述了山体、树木等线条的勾勒、粗黑曲折的岩纹、细腻的线条与流畅的轮廓，直接支持线条相关描述。"}
+{"term": "笔法", "category": "技法", "supported_by_ground_truth": true, "reason": "线索明确描述“细致的笔法”、“山壁岩纹理历历可见”、“雨点皴拉长了视觉高度”等，支持细致笔法和工整灵动等特征。"}
+{"term": "构图", "category": "构图", "supported_by_ground_truth": true, "reason": "构图部分中多处强调高低错落、整体构图平衡、稳重且变化等，且详述了视觉空间、远近处理，直接支持此术语。"}
+{"term": "主色调", "category": "设色", "supported_by_ground_truth": false, "reason": "视觉线索提到画作‘以浅淡的色彩作极为精致的构图’、‘部分叶片留红绿痕迹，说明原作为彩色’，但未见蓝色与暖黄色对比为主色调的直接描述。"}
+{"term": "气韵", "category": "美学范畴", "supported_by_ground_truth": false, "reason": "视觉线索基准有对画作的空间感、气势、布局等客观特征描述，但没有直接涉及“气韵”或具体阐述‘气韵’之内容。"}
+{"term": "流派", "category": "流派", "supported_by_ground_truth": true, "reason": "视觉线索“流派”明示为‘水墨画、山水画、界画’，并多处说明山水画的特征，支持‘中国山水画’流派的描述。"}
+{"term": "题跋", "category": "题跋", "supported_by_ground_truth": true, "reason": "视觉线索‘印记题跋’详列诸多题跋及其释文，直接支持题跋相关描述。"}
+{"term": "材质", "category": "材质", "supported_by_ground_truth": true, "reason": "视觉线索明确说明画作为‘丝质的绢作为画布’，支持关于材料（绢本）特性的描述。但线索并未直接说明色彩用于展示不同材质质感，故仅材质本身被明确支持。"}

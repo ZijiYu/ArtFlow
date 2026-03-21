@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TextScore Optimization View</title>
+  <style>
+    :root {
+      --bg: #efe9de;
+      --paper: #fffdf8;
+      --ink: #1e1a16;
+      --muted: #6f655b;
+      --border: #d9cfc3;
+      --needs-work: #ffe6c8;
+      --stable: #eef2eb;
+      --chip: #f6efe4;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "PingFang SC", "Noto Serif SC", serif;
+      background: radial-gradient(circle at top, #f7f1e4, var(--bg));
+      color: var(--ink);
+    }
+    .wrap {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 32px 20px 48px;
+    }
+    h1 { margin: 0 0 8px; font-size: 32px; }
+    p { margin: 0 0 24px; color: var(--muted); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+    }
+    .panel {
+      background: rgba(255,255,255,0.78);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px;
+      backdrop-filter: blur(12px);
+    }
+    .sentence {
+      border-radius: 14px;
+      padding: 12px;
+      margin-bottom: 12px;
+      border: 1px solid var(--border);
+    }
+    .sentence.needs-work { background: var(--needs-work); }
+    .sentence.stable { background: var(--stable); }
+    .sid { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .content { line-height: 1.7; font-size: 15px; margin-bottom: 8px; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+    .chip {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--chip);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      color: #4d4339;
+    }
+    .meta-line { font-size: 12px; color: #4d4339; margin-bottom: 6px; }
+    .details { margin-top: 10px; }
+    .details summary { cursor: pointer; color: #7b4d13; }
+    .detail-item { margin-top: 8px; font-size: 13px; color: #4d4339; line-height: 1.6; }
+    @media (max-width: 960px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>TextScore 优化视图</h1>
+    <p>context_2 需要优化的句子更多。 橙色表示值得优化，绿色表示当前优先级较低。点击橙色句子的折叠项可查看 reasoning 与优化建议。</p>
+    <div class="grid">
+      <section class="panel">
+        <h2>context_1</h2>
+        <div class="sentence needs-work"><div class="sid">S0</div><div class="content">《溪山行旅图》是北宋画家范宽的代表作之一，现藏于台北故宫博物院。</div><div class="meta"><span class="chip">score 2</span> <span class="chip">loss 2</span> <span class="chip">logic 2</span> <span class="chip">slot 1</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 无</div><div class="meta-line"><strong>matched_terms:</strong> 无</div><details class="details"><summary>展开诊断与优化建议</summary><div class="detail-item"><strong>reasoning:</strong> 句子简单介绍了作品，但缺乏更详细的背景信息和其在艺术史中的重要性，这限制了读者对作品的理解。</div><div class="detail-item"><strong>improvement:</strong> 可以添加关于范宽的生平以及《溪山行旅图》的创作背景，包括其艺术风格特点、影响力等。</div></details></div>
+<div class="sentence stable"><div class="sid">S1</div><div class="content">这幅画以山水为主题，展现了北宋山水画的巅峰艺术成就。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 文学、美学</div><div class="meta-line"><strong>matched_terms:</strong> 无</div></div>
+<div class="sentence stable"><div class="sid">S2</div><div class="content">以下是对这幅画的赏析：</div><div class="meta"><span class="chip">score 4</span> <span class="chip">loss 1</span> <span class="chip">logic 4</span> <span class="chip">slot 0</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 无</div><div class="meta-line"><strong>matched_terms:</strong> 无</div></div>
+<div class="sentence stable"><div class="sid">S3</div><div class="content">### 1. **构图布局**
+画面采用高远的构图方式，山峰巍峨高耸，直插云霄，给人以壮丽宏伟的视觉感受。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 结构、美学</div><div class="meta-line"><strong>matched_terms:</strong> 无</div></div>
+<div class="sentence stable"><div class="sid">S4</div><div class="content">画面分为前景、中景和远景三部分，层次分明。</div><div class="meta"><span class="chip">score 4</span> <span class="chip">loss 1</span> <span class="chip">logic 4</span> <span class="chip">slot 0</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 无</div><div class="meta-line"><strong>matched_terms:</strong> 无</div></div>
+<div class="sentence stable"><div class="sid">S5</div><div class="content">前景是溪流与岩石，中景是树木与山坡，远景是高耸入云的山峰。</div><div class="meta"><span class="chip">score 4</span> <span class="chip">loss 1</span> <span class="chip">logic 4</span> <span class="chip">slot 0</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 无</div><div class="meta-line"><strong>matched_terms:</strong> 无</div></div>
+<div class="sentence stable"><div class="sid">S6</div><div class="content">整体构图充满张力，展现了自然的雄伟与深邃。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 0</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 无</div><div class="meta-line"><strong>matched_terms:</strong> 无</div></div>
+<div class="sentence stable"><div class="sid">S7</div><div class="content">### 2. **笔墨技法**
+范宽以细腻的笔触描绘了山石的质感和树木的生机。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 技法</div><div class="meta-line"><strong>matched_terms:</strong> 无</div></div>
+<div class="sentence stable"><div class="sid">S8</div><div class="content">山石的皴法采用“雨点皴”，笔触密集而有力，表现出山石的坚硬与厚重。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 技法</div><div class="meta-line"><strong>matched_terms:</strong> 无</div></div>
+<div class="sentence stable"><div class="sid">S9</div><div class="content">树木的描绘则用笔灵动，枝干虬曲，富有生命力。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 技法</div><div class="meta-line"><strong>matched_terms:</strong> 无</div></div>
+<div class="sentence stable"><div class="sid">S10</div><div class="content">水流的描绘则以淡墨渲染，营造出流动的感觉，与山石的厚重形成对比。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 技法</div><div class="meta-line"><strong>matched_terms:</strong> 无</div></div>
+<div class="sentence stable"><div class="sid">S11</div><div class="content">### 3. **意境表达**
+画面不仅表现了自然的壮美，还蕴含了深刻的哲学意境。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 美学</div><div class="meta-line"><strong>matched_terms:</strong> 无</div></div>
+<div class="sentence stable"><div class="sid">S12</div><div class="content">山峰的高耸与溪流的蜿蜒形成对比，象征天地的永恒与生命的流转。</div><div class="meta"><span class="chip">score 4</span> <span class="chip">loss 1</span> <span class="chip">logic 4</span> <span class="chip">slot 0</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 无</div><div class="meta-line"><strong>matched_terms:</strong> 无</div></div>
+<div class="sentence stable"><div class="sid">S13</div><div class="content">画中隐约可见行旅的人物和牛车，点缀在广阔的自然之中，突出了人在自然面前的渺小，表达了“天人合一”的思想。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 0</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 无</div><div class="meta-line"><strong>matched_terms:</strong> 无</div></div>
+<div class="sentence stable"><div class="sid">S14</div><div class="content">### 4. **色彩运用**
+画面以墨色为主，辅以淡淡的赭石色，整体色调古朴典雅。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 0</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 无</div><div class="meta-line"><strong>matched_terms:</strong> 无</div></div>
+<div class="sentence stable"><div class="sid">S15</div><div class="content">墨色的浓淡变化表现了山水的层次感和空间感，赭石色的点缀则增添了画面的温暖与生机。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 0</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 无</div><div class="meta-line"><strong>matched_terms:</strong> 无</div></div>
+<div class="sentence stable"><div class="sid">S16</div><div class="content">### 5. **艺术特色**
+范宽的《溪山行旅图》体现了北宋山水画“全景式”构图的特点，画面气势恢宏，注重真实自然的描绘，同时融入了画家的主观情感。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 美学、技法</div><div class="meta-line"><strong>matched_terms:</strong> 无</div></div>
+<div class="sentence stable"><div class="sid">S17</div><div class="content">作品不仅是自然景观的再现，更是画家内心世界的表达。</div><div class="meta"><span class="chip">score 4</span> <span class="chip">loss 1</span> <span class="chip">logic 4</span> <span class="chip">slot 0</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 无</div><div class="meta-line"><strong>matched_terms:</strong> 无</div></div>
+<div class="sentence stable"><div class="sid">S18</div><div class="content">### 6. **文化意义**
+这幅画反映了北宋时期文人画家的审美追求，即通过山水画表达对自然的敬畏与热爱，以及对人生哲理的思考。</div><div class="meta"><span class="chip">score 4</span> <span class="chip">loss 1</span> <span class="chip">logic 4</span> <span class="chip">slot 0</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 无</div><div class="meta-line"><strong>matched_terms:</strong> 无</div></div>
+<div class="sentence stable"><div class="sid">S19</div><div class="content">《溪山行旅图》不仅是一幅艺术杰作，也是中国传统文化的重要象征。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 0</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 无</div><div class="meta-line"><strong>matched_terms:</strong> 无</div></div>
+<div class="sentence stable"><div class="sid">S20</div><div class="content">总之，《溪山行旅图》以其壮丽的构图、精湛的技法和深远的意境，成为中国山水画史上的不朽之作。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 技法、美学</div><div class="meta-line"><strong>matched_terms:</strong> 无</div></div>
+      </section>
+      <section class="panel">
+        <h2>context_2</h2>
+        <div class="sentence needs-work"><div class="sid">S0</div><div class="content">请结合图像与以下分领域赏析要点，对这幅中国画进行赏析。</div><div class="meta"><span class="chip">score 1</span> <span class="chip">loss 1</span> <span class="chip">logic 1</span> <span class="chip">slot 1</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 无</div><div class="meta-line"><strong>matched_terms:</strong> 无</div><details class="details"><summary>展开诊断与优化建议</summary><div class="detail-item"><strong>reasoning:</strong> 句子缺乏具体指引，使得读者无法清晰理解赏析的重点内容。</div><div class="detail-item"><strong>improvement:</strong> 可以加入对中国画的具体元素的描述，比如具体技法、结构和美学特征，使得赏析方向更加明确。</div></details></div>
+<div class="sentence stable"><div class="sid">S1</div><div class="content">## 补充信息
+### tech
+- 此幅作品运用了细腻的笔法，山石的层次感和质感表现得淋漓尽致，令人叹为观止。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 技法</div><div class="meta-line"><strong>matched_terms:</strong> 细腻的笔法、山石的层次感、质感表现</div></div>
+<div class="sentence stable"><div class="sid">S2</div><div class="content">- 皴法的运用巧妙，特别是山体的纹理与皴法的结合，增强了画面的立体感。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 技法</div><div class="meta-line"><strong>matched_terms:</strong> 皴法、纹理、立体感</div></div>
+<div class="sentence stable"><div class="sid">S3</div><div class="content">- 墨法方面，黑白对比鲜明，墨色的浓淡变化为画面增添了深邃的气氛。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 技法</div><div class="meta-line"><strong>matched_terms:</strong> 黑白对比、墨色变化、深邃气氛</div></div>
+<div class="sentence stable"><div class="sid">S4</div><div class="content">- 设色上，整体以淡雅的色调为主，既不浮夸，又能体现出自然的和谐美。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 技法、美学</div><div class="meta-line"><strong>matched_terms:</strong> 淡雅的色调、自然的和谐美</div></div>
+<div class="sentence needs-work"><div class="sid">S5</div><div class="content">- 留白技法运用得当，空白处恰到好处，给观者留下了丰富的想象空间。</div><div class="meta"><span class="chip">score 4</span> <span class="chip">loss 1</span> <span class="chip">logic 4</span> <span class="chip">slot 4</span> <span class="chip">redundancy 1</span></div><div class="meta-line"><strong>matched_slots:</strong> 技法</div><div class="meta-line"><strong>matched_terms:</strong> 留白技法、空白处、想象空间</div><details class="details"><summary>展开诊断与优化建议</summary><div class="detail-item"><strong>reasoning:</strong> 尽管描述了留白的技法，但整体表达略显普遍，缺乏具体实例和深度探讨。</div><div class="detail-item"><strong>improvement:</strong> 增加对留白在创作中具体应用的例子，更深入探讨其对观者的影响。</div></details></div>
+<div class="sentence stable"><div class="sid">S6</div><div class="content">### composition
+- 画面的布局通过高耸的山峰与低洼的溪流形成鲜明对比，增强了空间的层次感。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 结构</div><div class="meta-line"><strong>matched_terms:</strong> 布局、高耸的山峰、低洼的溪流</div></div>
+<div class="sentence stable"><div class="sid">S7</div><div class="content">- 虚实结合的表现手法使远处的山石显得朦胧，营造出一种神秘的氛围。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 结构</div><div class="meta-line"><strong>matched_terms:</strong> 虚实结合、朦胧、神秘氛围</div></div>
+<div class="sentence needs-work"><div class="sid">S8</div><div class="content">- 视线引导上，从前景的树林逐渐延伸到远处的山峰，使观者的目光自然流动。</div><div class="meta"><span class="chip">score 4</span> <span class="chip">loss 1</span> <span class="chip">logic 4</span> <span class="chip">slot 4</span> <span class="chip">redundancy 1</span></div><div class="meta-line"><strong>matched_slots:</strong> 结构</div><div class="meta-line"><strong>matched_terms:</strong> 视线引导、前景、远处的山峰</div><details class="details"><summary>展开诊断与优化建议</summary><div class="detail-item"><strong>reasoning:</strong> 尽管描述了视线的引导，但缺乏具体细节，可能给读者造成理解上的困难。</div><div class="detail-item"><strong>improvement:</strong> 详细描述观者视线的具体流向和转移的原因，以增强逻辑性和图像感。</div></details></div>
+<div class="sentence needs-work"><div class="sid">S9</div><div class="content">- 整体节奏感通过山石的起伏与溪流的流动相互交织，形成了一种和谐而富有动感的画面。</div><div class="meta"><span class="chip">score 4</span> <span class="chip">loss 1</span> <span class="chip">logic 4</span> <span class="chip">slot 4</span> <span class="chip">redundancy 1</span></div><div class="meta-line"><strong>matched_slots:</strong> 结构</div><div class="meta-line"><strong>matched_terms:</strong> 整体节奏感、山石的起伏、溪流的流动</div><details class="details"><summary>展开诊断与优化建议</summary><div class="detail-item"><strong>reasoning:</strong> 整体节奏感的描述略显模糊，缺少对其构成要素的具体分析。</div><div class="detail-item"><strong>improvement:</strong> 可以详细说明山石与溪流如何相互作用，来形成节奏感的细节。</div></details></div>
+<div class="sentence stable"><div class="sid">S10</div><div class="content">- 画中细致的笔触与简练的构图相得益彰，展现了艺术家高超的技艺与深厚的情感。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 技法、结构</div><div class="meta-line"><strong>matched_terms:</strong> 细致的笔触、简练的构图、艺术家技艺</div></div>
+<div class="sentence stable"><div class="sid">S11</div><div class="content">### literary
+- 画作中的题跋，常常以诗文的形式表达了对自然的感悟，增强了作品的文学内涵。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 文学</div><div class="meta-line"><strong>matched_terms:</strong> 题跋、诗文、自然的感悟</div></div>
+<div class="sentence stable"><div class="sid">S12</div><div class="content">- 印章的运用不仅是艺术家的身份标识，也为作品增添了历史的厚重感，形成了独特的文化印记。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 文学</div><div class="meta-line"><strong>matched_terms:</strong> 印章、艺术家的身份标识、历史的厚重感</div></div>
+<div class="sentence stable"><div class="sid">S13</div><div class="content">- 诗文与山水的结合，使得画作在视觉与听觉之间建立了深刻的共鸣，引发观者的思考与联想。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 文学</div><div class="meta-line"><strong>matched_terms:</strong> 诗文、视觉与听觉、深刻的共鸣</div></div>
+<div class="sentence stable"><div class="sid">S14</div><div class="content">- 作品中所表现的溪山行旅，体现了文人对自然的向往与追求，反映了他们的精神世界与审美情趣。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 文学</div><div class="meta-line"><strong>matched_terms:</strong> 溪山行旅、文人对自然的向往、精神世界</div></div>
+<div class="sentence stable"><div class="sid">S15</div><div class="content">- 细腻的笔触和丰富的层次感，使得每一处细节都充满生机，诗意的表达更使观者沉浸其中。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 技法</div><div class="meta-line"><strong>matched_terms:</strong> 细腻的笔触、丰富的层次感、诗意的表达</div></div>
+<div class="sentence stable"><div class="sid">S16</div><div class="content">### aesthetic
+- 画面中的山峦巍峨，气韵生动，展现了自然的雄伟与壮丽，令人心生敬畏。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 美学</div><div class="meta-line"><strong>matched_terms:</strong> 山峦巍峨、气韵生动、自然的雄伟</div></div>
+<div class="sentence stable"><div class="sid">S17</div><div class="content">- 细腻的笔触和层次感使得远山与近景形成鲜明对比，营造出深邃的空间感。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 美学</div><div class="meta-line"><strong>matched_terms:</strong> 细腻的笔触、层次感、深邃的空间感</div></div>
+<div class="sentence stable"><div class="sid">S18</div><div class="content">- 意境深远，画中隐含着旅途的孤独与思索，唤起观者对人生态度的沉思。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 美学</div><div class="meta-line"><strong>matched_terms:</strong> 意境深远、孤独、人生态度</div></div>
+<div class="sentence stable"><div class="sid">S19</div><div class="content">- 山水之间的情绪张力通过细致的描绘与构图得以体现，让人感受到大自然的力量与宁静。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 美学</div><div class="meta-line"><strong>matched_terms:</strong> 情绪张力、细致的描绘、构图</div></div>
+<div class="sentence stable"><div class="sid">S20</div><div class="content">- 整体色调柔和，既有古朴的韵味，又蕴含着深邃的哲理，令人流连忘返。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 美学</div><div class="meta-line"><strong>matched_terms:</strong> 整体色调、古朴的韵味、深邃的哲理</div></div>
+<div class="sentence stable"><div class="sid">S21</div><div class="content">### material
+- 纸绢的质感在画中展现出细腻的层次感，使得山水景色更加生动。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 材料</div><div class="meta-line"><strong>matched_terms:</strong> 纸绢的质感、层次感、山水景色</div></div>
+<div class="sentence stable"><div class="sid">S22</div><div class="content">- 颜料的运用上，淡雅的色调与丰富的笔触相结合，营造出宁静的氛围。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 材料</div><div class="meta-line"><strong>matched_terms:</strong> 颜料的运用、淡雅的色调、宁静的氛围</div></div>
+<div class="sentence stable"><div class="sid">S23</div><div class="content">- 画作的老化痕迹增添了历史的厚重感，仿佛诉说着岁月的故事。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 材料</div><div class="meta-line"><strong>matched_terms:</strong> 老化痕迹、历史的厚重感、岁月的故事</div></div>
+<div class="sentence stable"><div class="sid">S24</div><div class="content">- 在细节处，颜料的渐变与阴影处理，体现了艺术家的高超技艺。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 材料</div><div class="meta-line"><strong>matched_terms:</strong> 细节处、颜料的渐变、阴影处理</div></div>
+<div class="sentence stable"><div class="sid">S25</div><div class="content">- 整体构图和材质的结合，使得这幅作品在视觉上形成了和谐统一的美感。</div><div class="meta"><span class="chip">score 5</span> <span class="chip">loss 0</span> <span class="chip">logic 5</span> <span class="chip">slot 5</span> <span class="chip">redundancy 0</span></div><div class="meta-line"><strong>matched_slots:</strong> 结构、材料</div><div class="meta-line"><strong>matched_terms:</strong> 整体构图、材质、视觉美感</div></div>
+      </section>
+    </div>
+  </div>
+</body>
+</html>
