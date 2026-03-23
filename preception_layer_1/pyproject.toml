@@ -1,0 +1,19 @@
+[project]
+name = "guohua-perception-layer"
+version = "0.1.0"
+description = "Generalized domain-aware perception pipeline for Chinese painting."
+requires-python = ">=3.11"
+dependencies = [
+  "openai>=1.30.0",
+  "pillow>=10.0.0",
+]
+
+[project.scripts]
+guohua-perception = "perception_layer.cli:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["perception_layer"]

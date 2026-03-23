@@ -1,0 +1,7 @@
+[project]
+name = "slots-v2"
+version = "0.1.0"
+description = "Dynamic agent pipeline for Chinese painting appreciation"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["PyYAML>=6.0"]
