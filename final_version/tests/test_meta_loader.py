@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.slots_v2.meta_loader import load_context_meta, merge_meta
+from src.cot_layer.meta_loader import load_context_meta, merge_meta
 
 
 class MetaLoaderTests(unittest.TestCase):

@@ -1,14 +1,24 @@
 # Python-generated files
 __pycache__/
 *.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
 
 # Virtual environments
-.venv
+.venv/
+*/.venv/
 
 # MacOS
 .DS_Store
 */.DS_Store
+
+# Secrets
+api.txt
+**/api.txt
+
+# Generated artifacts
+final_version/artifacts_closed_loop/manual_test/
+final_version/eval_v2/artifacts/
+cluster_match/artifacts/

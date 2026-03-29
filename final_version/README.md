@@ -1,90 +1,99 @@
-# slots_v2
+# ArtFlow
 
-`slots_v2` 现在包含两层能力：
+ArtFlow is a closed-loop analysis pipeline for Chinese painting appreciation. It starts from a single painting image, bootstraps a slot-based understanding of the work, iteratively expands evidence through domain-specific reasoning and retrieval, and finally produces a grounded appreciation text rather than a one-shot freeform answer.
 
-1. `slots_v2` 自身的多轮 CoT 收敛引擎
-2. 与 `preception_layer_1` 联动的闭环 coordinator
+The implementation is organized as a layered system:
 
-闭环入口在 [closed_loop.py](/Users/ken/MM/Pipeline/final_version/pics/closed_loop.py)，会按下面的顺序工作：
+- `preception_layer/`: image bootstrap, initial slot construction, early grounding, and downstream evidence merge.
+- `src/cot_layer/`: slot-oriented CoT execution, thread management, runtime state, and closed-loop coordination.
+- `src/cross_validation_layer/`: round-table review for blind-spot detection, follow-up questions, and slot lifecycle checks.
+- `src/reflection_layer/`: retrieval planning, routing, convergence judgment, and final appreciation synthesis.
+- `../cluster_match/`: companion structured evaluation toolkit for factor extraction and score analysis.
 
-1. 用 `preception_layer_1` bootstrap 生成初始 `slots.jsonl` 与 `context.md`
-2. 用 `slots_v2` 跑多轮 `Domain CoT -> Round-table -> Reflection`
-3. 把 Reflection 产生的 `spawned_tasks` 转成 `preception_layer_1` downstream task
-4. 把 downstream 结果回灌为新的 runtime `slots.jsonl` 与 `context.md`
-5. 继续下一轮，直到收敛或达到轮数上限
+The current pipeline supports:
 
-## 核心入口
+- slot-level progressive analysis instead of a single monolithic prompt,
+- cumulative runtime memory across rounds,
+- local RAG plus optional web search routing,
+- downstream discovery tasks for missing catalog, author, and contextual evidence,
+- final synthesis that explicitly covers key slots and retained facts.
 
-- `slots_v2` 单独运行：
-  [main.py](/Users/ken/MM/Pipeline/final_version/pics/main.py)
-- 闭环运行：
-  [closed_loop.py](/Users/ken/MM/Pipeline/final_version/pics/closed_loop.py)
-- 闭环 bridge：
-  [closed_loop.py](/Users/ken/MM/Pipeline/final_version/src/slots_v2/closed_loop.py)
+## Quickstart
 
-## 快速开始
-
-建议使用你当前的 Anaconda 环境：
-
-```bash
-export OPENAI_API_KEY="your_key"
-```
-
-只跑 `slots_v2`：
-
-```bash
-/opt/anaconda3/envs/agent/bin/python /Users/ken/MM/Pipeline/final_version/pics/main.py \
-  --image /Users/ken/MM/Pipeline/slots_v1/pics/测试1.png \
-  --slots-file /Users/ken/MM/Pipeline/preception_layer/artifacts/slots.jsonl \
-  --meta-context-file /Users/ken/MM/Pipeline/preception_layer/artifacts/context.md \
-  --output-dir /Users/ken/MM/Pipeline/final_version/artifacts
-```
-
-跑完整闭环：
-
-```bash
-/opt/anaconda3/envs/agent/bin/python /Users/ken/MM/Pipeline/final_version/pics/closed_loop.py \
-  --image /Users/ken/MM/Pipeline/slots_v1/pics/测试1.png \
-  --text "请对这幅国画做严谨赏析，优先看皴法、题跋和时代线索。" \
-  --meta-context-file /Users/ken/MM/Pipeline/preception_layer/artifacts/context.md \
-  --output-dir /Users/ken/MM/Pipeline/final_version/artifacts_closed_loop
-```
-
-## 输出
-
-`slots_v2` 单轮或多轮输出：
-
-- `summary.md`
-- `final_appreciation_prompt.md`
-- `domain_outputs.json`
-- `cross_validation.json`
-- `routing.json`
-- `dialogue_state.json`
-- `cot_threads.json`
-
-闭环额外输出：
-
-- `perception_bootstrap/slots.jsonl`
-- `perception_bootstrap/context.md`
-- `runtime_state/slots_final.jsonl`
-- `runtime_state/context_final.md`
-- `downstream_rounds/.../task_*_payload.json`
-- `downstream_rounds/.../task_*_response.json`
-- `closed_loop_report.json`
-
-## 测试
-
-单元测试：
+### 1. Install
 
 ```bash
 cd /Users/ken/MM/Pipeline/final_version
-PYTHONPYCACHEPREFIX=/tmp/slots_v2_pycache /opt/anaconda3/envs/agent/bin/python -m unittest discover -s tests
+uv sync
 ```
 
-编译检查：
+If you do not use `uv`, a minimal fallback is:
 
 ```bash
-PYTHONPYCACHEPREFIX=/tmp/slots_v2_pycache /opt/anaconda3/envs/agent/bin/python -m compileall /Users/ken/MM/Pipeline/final_version/src /Users/ken/MM/Pipeline/final_version/pics
+cd /Users/ken/MM/Pipeline/final_version
+python3 -m venv .venv
+source .venv/bin/activate
+pip install PyYAML
 ```
 
-更完整的技术说明、各环节输入输出、Quickstart 和 Mermaid 图见 [TECHNICAL_REPORT.md](/Users/ken/MM/Pipeline/final_version/TECHNICAL_REPORT.md)。
+### 2. Configure the API
+
+Edit [`config.yaml`](./config.yaml) and set either:
+
+- `api.key`, or
+- `api.key_file` to a local secret file that is not committed.
+
+Optional web search is controlled through `web_search.enabled`. When disabled, the pipeline runs with the local retrieval path only.
+
+### 3. Run a single-pass analysis
+
+```bash
+cd /Users/ken/MM/Pipeline/final_version
+python pics/main.py \
+  --config config.yaml \
+  --image /absolute/path/to/painting.jpg
+```
+
+This produces a standard slots run with outputs such as `domain_outputs.json`, `cross_validation.json`, `routing.json`, and `final_appreciation_prompt.md`.
+
+### 4. Run the full closed loop
+
+```bash
+cd /Users/ken/MM/Pipeline/final_version
+python pics/closed_loop.py \
+  --config config.yaml \
+  --image /absolute/path/to/painting.jpg \
+  --text "请对这幅国画做严谨分析。"
+```
+
+This triggers the full pipeline:
+
+1. bootstrap in `preception_layer`,
+2. slot-level CoT analysis,
+3. round-table validation and routing,
+4. downstream discovery when evidence is missing,
+5. cumulative final appreciation generation.
+
+The run directory is written under the `closed_loop.output_dir` configured in [`config.yaml`](./config.yaml).
+
+### 5. Run tests
+
+```bash
+cd /Users/ken/MM/Pipeline/final_version
+PYTHONPATH=/Users/ken/MM/Pipeline/final_version pytest tests -q
+```
+
+## Outputs
+
+The most important outputs are:
+
+- `perception_bootstrap/slots.jsonl`: initial slot schema,
+- `runtime_state/slots_final.jsonl`: final slot state after closed-loop updates,
+- `runtime_state/downstream_rag_cache.json`: retrieval cache accumulated across rounds,
+- `slots_rounds/.../domain_outputs.json`: per-round slot reasoning outputs,
+- `slots_rounds/.../cross_validation.json`: blind spots, follow-ups, and lifecycle review,
+- `final_appreciation_prompt.md`: final grounded appreciation text.
+
+## More Detail
+
+For a full architecture and research-oriented explanation, see [`TECHNICAL_REPORT.md`](./TECHNICAL_REPORT.md).
