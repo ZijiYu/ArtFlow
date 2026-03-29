@@ -1,2 +1,0 @@
-{"slot_name": "技法", "matched_terms": ["留白"], "matched_categories": ["构图"], "sentence_ids": [18, 42], "reason": "术语'留白'明确包含于slot技法的covered_terms（留白技法），并多处提及画面中的留白表达和留白的视觉及心理空间，因此命中该slot。"}
-{"slot_name": "构图", "matched_terms": ["构图", "层次感", "留白"], "matched_categories": ["构图"], "sentence_ids": [1, 7, 17, 29, 40, 41, 4, 28, 39, 18, 42], "reason": "术语'构图'、'层次感'和'留白'均在构图slot的covered_terms中明确列出或包含。'构图'提及画面布局，'层次感'反复描述空间层次与空间递进，'留白'作为空间布局手段涉及构图因素。"}

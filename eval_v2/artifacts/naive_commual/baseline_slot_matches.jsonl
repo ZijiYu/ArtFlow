@@ -1,5 +1,0 @@
-{"slot_name": "技法", "matched_terms": ["笔墨", "线条", "水墨"], "matched_categories": ["技法", "技法", "技法"], "sentence_ids": [2, 1, 3, 19], "reason": "术语‘笔墨’、‘线条’、‘水墨’均与技法相关，说明了画作在笔法及墨法、线条运用等技艺方面的表现，命中技法 slot。"}
-{"slot_name": "构图", "matched_terms": ["高远", "深远"], "matched_categories": ["构图", "构图"], "sentence_ids": [5, 5], "reason": "术语‘高远’、‘深远’都明确属于构图方式，反映空间布局与层次，命中构图 slot。"}
-{"slot_name": "文意", "matched_terms": ["题跋"], "matched_categories": ["题跋"], "sentence_ids": [17], "reason": "‘题跋’在 covered_terms 内，且与文意 slot 直接相关，命中文意 slot。"}
-{"slot_name": "审美", "matched_terms": ["气韵"], "matched_categories": ["画理"], "sentence_ids": [10], "reason": "‘气韵’虽然未直接在 covered_terms，但‘气韵生动’在 covered_terms，且‘气韵’体现审美感受，因此命中审美 slot。"}
-{"slot_name": "材质", "matched_terms": ["宣纸", "丝绸"], "matched_categories": ["材质", "材质"], "sentence_ids": [19, 19], "reason": "‘宣纸’、‘丝绸’均为材质范畴，covered_terms 有‘纸绢材质’，二者均可归入‘材质’ slot。"}

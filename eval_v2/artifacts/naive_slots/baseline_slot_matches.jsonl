@@ -1,4 +1,0 @@
-{"slot_name": "技法", "matched_terms": ["笔墨", "线条", "色彩", "水墨"], "matched_categories": ["技法", "技法", "设色", "技法/材质"], "sentence_ids": [1, 2, 3, 6, 7, 19], "reason": "‘笔墨’和‘线条’属于 slots 定义中的笔法、墨法表现，‘色彩’属于设色，‘水墨’涉及墨法，与技法 slot 内容高度相关。"}
-{"slot_name": "构图", "matched_terms": ["构图"], "matched_categories": ["构图方式"], "sentence_ids": [4, 5], "reason": "‘构图’直接明确为构图方式，且描述了画面的空间布局与层次布局，命中 slot 定义。"}
-{"slot_name": "文人意趣", "matched_terms": ["题跋"], "matched_categories": ["题跋"], "sentence_ids": [17], "reason": "‘题跋’为 covered_terms，明确对应 slot ‘文人意趣’。"}
-{"slot_name": "材料工艺", "matched_terms": ["宣纸", "丝绸", "水墨"], "matched_categories": ["材质", "材质", "技法/材质"], "sentence_ids": [19], "reason": "‘宣纸’与‘丝绸’是纸绢材质的具体表现，‘水墨’与材料结合影响画面效果，符合 slot 对材料及材质的关注点。"}

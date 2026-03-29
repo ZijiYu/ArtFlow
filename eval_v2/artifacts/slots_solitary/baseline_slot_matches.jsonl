@@ -1,3 +1,0 @@
-{"slot_name": "tech", "matched_terms": ["笔法"], "matched_categories": ["技法"], "sentence_ids": [4], "reason": "笔法是tech slot的直接covered_term，其提及细致笔法，明确命中该slot。"}
-{"slot_name": "aesthetic", "matched_terms": ["气韵"], "matched_categories": ["美学范畴"], "sentence_ids": [16, 18], "reason": "气韵是aesthetic slot的直接covered_term，术语内容明确涉及气韵生动，命中该slot。"}
-{"slot_name": "literary", "matched_terms": ["题跋"], "matched_categories": ["题跋"], "sentence_ids": [27], "reason": "题跋是literary slot的直接covered_term，术语具体描述了题跋对于文化和情感的意义，命中该slot。"}

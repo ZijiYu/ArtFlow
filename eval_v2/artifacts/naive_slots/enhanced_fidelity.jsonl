@@ -1,8 +1,0 @@
-{"term": "山水画", "category": "流派/画种", "supported_by_ground_truth": true, "reason": "image_context_v多次直接表述本作为山水画，包括“流派: 水墨画、山水画、界画”及多处详述山水画特征，直接支持该术语。"}
-{"term": "构图", "category": "构图", "supported_by_ground_truth": true, "reason": "image_context_v详细描述了构图方式（如远近高低错落有致、平衡而不对称），并专设“构图”段落直接对应术语。"}
-{"term": "笔墨", "category": "技法", "supported_by_ground_truth": true, "reason": "image_context_v多次强调‘细腻笔触’、‘山壁岩纹理’、‘雨点皴’和用墨表现，明确支持笔墨技法的描述。"}
-{"term": "笔法", "category": "技法", "supported_by_ground_truth": true, "reason": "原文‘山壁岩纹理历历可见，线条粗黑曲折，使山形雄伟厚重并呈现立体感’和‘雨点皴’，明确展现笔法特征。"}
-{"term": "色彩运用", "category": "设色", "supported_by_ground_truth": true, "reason": "image_context_v提及‘浅淡的色彩’、‘部分植物叶片仍留红绿痕迹，说明原作为彩色’，并详细描述原作运用设色，支持该术语。"}
-{"term": "气韵", "category": "美学思想", "supported_by_ground_truth": true, "reason": "‘呈现立体空间感’、‘明代董其昌评价此画为“宋画第一”’以及画评中的“大气磅礡，沉雄高古”等，均论及画作气韵生动，直接支持该术语。"}
-{"term": "题跋", "category": "题跋印章", "supported_by_ground_truth": true, "reason": "image_context_v‘印记题跋’板块详细列出历代题跋、印记内容（含董其昌等跋文），完全支持该术语。"}
-{"term": "材质", "category": "材质", "supported_by_ground_truth": true, "reason": "image_context_v‘媒介: 绢’和‘使用丝质的绢作为画布’直接表述了材质，支持相关术语。"}
