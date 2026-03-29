@@ -1,8 +1,0 @@
-{"term": "构图", "category": "构图", "supported_by_ground_truth": true, "reason": "视觉线索基准中多次明确描述了画面构图、空间布局、视线引导等内容，详见'构图'条目和相关段落。"}
-{"term": "色彩对比", "category": "设色", "supported_by_ground_truth": false, "reason": "视觉线索基准只提及浅淡设色、部分植物叶片留有红绿痕迹，并未描述蓝色与橙色、山体与树干等色彩对比，故未能直接支持所述内容。"}
-{"term": "层次感", "category": "构图", "supported_by_ground_truth": true, "reason": "视觉线索中详细描述了山川结构的远近空间感、立体空间层次及山体高耸等，直接支持该术语。"}
-{"term": "山水画", "category": "画种", "supported_by_ground_truth": true, "reason": "视觉线索明确定义本作为山水画，直接支持该术语。"}
-{"term": "留白", "category": "构图", "supported_by_ground_truth": false, "reason": "视觉线索基准中未出现'留白'或近似描述，没有对画面空白空间的艺术表达或其作用进行说明，故不被直接支持。"}
-{"term": "松树", "category": "题材", "supported_by_ground_truth": true, "reason": "视觉线索明确提及山顶树木、枝叶层次丰富，并具体描述了部分植物叶片、枝干，支持松树作为题材。"}
-{"term": "山峦", "category": "题材", "supported_by_ground_truth": true, "reason": "视觉线索对高山、山壁、山形、立体空间等反复具体描写，直接支持该术语。"}
-{"term": "高远", "category": "艺术理念", "supported_by_ground_truth": true, "reason": "视觉线索提及高山右侧、巨石高耸、山体高耸、空间感和“探索更高的境界”等内容，呼应了中国画'高远'理念。"}

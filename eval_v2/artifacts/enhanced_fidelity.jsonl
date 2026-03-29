@@ -1,6 +1,0 @@
-{"term": "北宋", "category": "朝代", "supported_by_ground_truth": true, "reason": "视觉线索基准多处明确指明《谿山行旅图》为北宋作品（如“北宋（10世纪末－11世纪初）”、“北宋初画家范宽的作品”）。"}
-{"term": "中国台北故宫博物院", "category": "馆藏机构", "supported_by_ground_truth": true, "reason": "视觉线索基准明示该画作现收藏于台北国立故宫博物院（如“收藏地: 台北市士林区国立故宫博物院”）。"}
-{"term": "绢本", "category": "材质", "supported_by_ground_truth": true, "reason": "视觉线索基准明确说明“使用丝质的绢作为画布”，表明材质为绢本。"}
-{"term": "立轴", "category": "装裱形制", "supported_by_ground_truth": true, "reason": "视觉线索基准“宋范宽谿山行旅图 轴”及“纵长206.3公分，横宽103.3公分”等信息表明为立轴形式。"}
-{"term": "斧劈皴法", "category": "皴法", "supported_by_ground_truth": false, "reason": "视觉线索基准中仅描述了“雨点皴”等笔法特征，未见‘斧劈皴法’的直接表述或指向。"}
-{"term": "水墨", "category": "设色法", "supported_by_ground_truth": true, "reason": "视觉线索基准明示“水墨画”、“以浅淡的色彩作极为精致的构图”，并未见明显设色，且归属于水墨与山水画流派。"}

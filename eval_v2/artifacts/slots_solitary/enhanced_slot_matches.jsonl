@@ -1,1 +1,0 @@
-{"slot_name": "tech", "matched_terms": ["轮廓线条", "蓝色渐变", "笔触"], "matched_categories": ["笔法", "设色", "笔法"], "sentence_ids": [3, 4, 11], "reason": "轮廓线条和笔触是笔法的细节表现，蓝色渐变涉及设色，与tech slot的笔法、设色维度直接对应。"}

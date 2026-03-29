@@ -1,5 +1,0 @@
-{"slot_name": "技法", "matched_terms": ["笔墨", "国画技法", "皴擦", "雨点皴", "墨色层次", "设色"], "matched_categories": ["技法", "笔法", "设色"], "sentence_ids": [1, 2, 3, 8, 19, 26, 27, 4, 10, 11, 12, 13, 29], "reason": "这些术语均落入 slots['技法'].covered_terms，如笔墨涵盖用笔用墨细节，国画技法及皴擦、雨点皴和墨色层次为皴法和墨法表现，设色直接命中设色。"}
-{"slot_name": "构图", "matched_terms": ["构图"], "matched_categories": ["构图"], "sentence_ids": [5, 6, 7, 8, 30, 31], "reason": "术语‘构图’直接被列入slots['构图'].covered_terms，是该 slot 的明确指标。"}
-{"slot_name": "审美", "matched_terms": ["气韵"], "matched_categories": ["美学概念"], "sentence_ids": [14, 15, 16, 17], "reason": "‘气韵’属于气韵生动（slots['审美'].covered_terms），与画面美学和情绪氛围密切相关，故归属审美。"}
-{"slot_name": "材质", "matched_terms": ["绢本"], "matched_categories": ["材质"], "sentence_ids": [23, 29], "reason": "‘绢本’与slots['材质'].covered_terms中的‘纸绢’属于同一范畴，明确为材质 slot。"}
-{"slot_name": "文意", "matched_terms": ["题跋", "印记"], "matched_categories": ["题跋内容", "印章内容"], "sentence_ids": [33, 36, 34], "reason": "‘题跋’与‘印记’分别命中slots['文意'].covered_terms列表中的‘题跋’和‘印章’，均落入文意。"}

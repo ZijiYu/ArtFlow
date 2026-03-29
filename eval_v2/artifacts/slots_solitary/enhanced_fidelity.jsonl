@@ -1,7 +1,0 @@
-{"term": "山水画", "category": "画种", "supported_by_ground_truth": true, "reason": "image_context_v多处明示本画为山水画，包括基本信息流派（山水画）及构图、题跋、画评等细节描述。"}
-{"term": "构图", "category": "构图", "supported_by_ground_truth": true, "reason": "image_context_v‘构图’段详细描述了层次、前后景、空间对比等构图特征，充分支持该术语。"}
-{"term": "空间感", "category": "艺术表达", "supported_by_ground_truth": true, "reason": "image_context_v多处提及空间感，如‘立体空间感’‘增强了空间感’，并具体描述前景与远景关系。"}
-{"term": "轮廓线条", "category": "笔法", "supported_by_ground_truth": true, "reason": "image_context_v引用‘山壁岩纹理历历可见，线条粗黑曲折’，描述线条与轮廓，对应该术语。"}
-{"term": "蓝色渐变", "category": "设色", "supported_by_ground_truth": false, "reason": "image_context_v仅提到‘浅淡的色彩’‘部分植物叶片仍留红绿痕迹’，未提及蓝色为主或渐变，因此不被直接支持。"}
-{"term": "笔触", "category": "笔法", "supported_by_ground_truth": true, "reason": "image_context_v提到‘以细腻笔触晕出如雾气般的墨彩’，‘枝叶皆描绘精细’，直接支持笔触描写。"}
-{"term": "传统美学", "category": "艺术思想", "supported_by_ground_truth": true, "reason": "image_context_v画评引用古今书画理论家与画家对本作美学高度评价（“大气磅礡，沉雄高古”等），明确承载中国山水画传统一致性。"}

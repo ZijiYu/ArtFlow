@@ -1,5 +1,0 @@
-{"slot_name": "技法", "matched_terms": ["笔墨", "笔法"], "matched_categories": ["技法", "技法"], "sentence_ids": [2, 4], "reason": "‘笔墨’与‘笔法’均为技法类术语，符合描述中笔法、墨法的范畴，关注表现手法。"}
-{"slot_name": "构图", "matched_terms": ["构图"], "matched_categories": ["构图"], "sentence_ids": [4, 6, 9, 22], "reason": "‘构图’术语与 slot 中的‘构图’和空间布局直接对应，涉及整体空间、平衡、远近高低等。"}
-{"slot_name": "文人意趣", "matched_terms": ["题跋"], "matched_categories": ["题跋印章"], "sentence_ids": [27], "reason": "‘题跋’为文人意趣 slot 中的 covered term，体现文化内涵与作品的精神延伸。"}
-{"slot_name": "审美表达", "matched_terms": ["气韵"], "matched_categories": ["美学思想"], "sentence_ids": [16, 18], "reason": "‘气韵’与‘气韵生动’同属美学意涵，关注画面的气韵与情绪氛围表现，契合该 slot。"}
-{"slot_name": "材料工艺", "matched_terms": ["材质"], "matched_categories": ["材质"], "sentence_ids": [29, 30], "reason": "‘材质’在 slot 的材料工艺范畴（如纸绢材质、材料质感等）之内，关注不同材质质感对画面影响。"}
