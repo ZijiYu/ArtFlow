@@ -298,7 +298,7 @@ def review_slot_lifecycle(
         image_path=None,
         prompt=prompt,
         system_prompt="你是严格的 slot lifecycle 裁决器，只输出结构化 JSON。",
-        temperature=0.0,
+        temperature=0.7,
         model=pipeline.config.validation_model or pipeline.config.domain_model,
         stage="slot_lifecycle_review",
     )
@@ -631,7 +631,7 @@ def task_rag_terms(
     result = pipeline.api_client.chat(
         system_prompt="你是严谨的中文检索规划器，只输出适合搜索引擎的关键词 JSON。",
         user_prompt=prompt,
-        temperature=0.0,
+        temperature=0.7,
         image_path=None,
         model=pipeline.config.validation_model or pipeline.config.domain_model,
     )
@@ -726,7 +726,7 @@ def batch_task_rag_terms(
     result = pipeline.api_client.chat(
         system_prompt="你是严谨的中文检索规划器，只输出适合搜索引擎的批量关键词 JSON。",
         user_prompt=prompt,
-        temperature=0.0,
+        temperature=0.7,
         image_path=None,
         model=pipeline.config.validation_model or pipeline.config.domain_model,
     )
@@ -825,7 +825,7 @@ def task_retrieval_plan(
     result = pipeline.api_client.chat(
         system_prompt="你是严谨的中文检索路由规划器，只输出结构化 JSON。",
         user_prompt=prompt,
-        temperature=0.0,
+        temperature=0.7,
         image_path=None,
         model=pipeline.config.validation_model or pipeline.config.domain_model,
     )
@@ -967,7 +967,7 @@ def batch_task_retrieval_plans(
     result = pipeline.api_client.chat(
         system_prompt="你是严谨的中文检索路由规划器，只输出结构化 JSON。",
         user_prompt=prompt,
-        temperature=0.0,
+        temperature=0.7,
         image_path=None,
         model=pipeline.config.validation_model or pipeline.config.domain_model,
     )
@@ -1619,7 +1619,7 @@ def generate_final_appreciation_prompt(
     result = pipeline.api_client.chat(
         system_prompt="你是严谨的中国画赏析写作者。请直接回答用户问题，优先基于现有证据，保持克制，不要编造，也不要遗漏输入中标记为 must_cover 的槽位事实。",
         user_prompt=prompt,
-        temperature=0.1,
+        temperature=0.7,
         image_path=None,
         model=getattr(pipeline.config, "final_answer_model", None)
         or getattr(pipeline.config, "final_prompt_model", None)

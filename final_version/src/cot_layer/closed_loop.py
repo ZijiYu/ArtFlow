@@ -4,6 +4,7 @@ import asyncio
 import json
 import mimetypes
 import re
+import shutil
 import sys
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime
@@ -13,7 +14,7 @@ from urllib.parse import urlparse
 
 from .image_utils import prepare_image
 from .meta_loader import load_context_meta, merge_meta
-from .config_loader import read_text_secret_file
+from .config_loader import DEFAULT_CONFIG_PATH, get_config_value, load_yaml_config, read_text_secret_file
 from .models import (
     CrossValidationIssue,
     CrossValidationResult,
@@ -102,6 +103,10 @@ class ClosedLoopConfig:
     max_downstream_tasks_per_round: int = 4
     stall_round_limit: int = 2
     downstream_rag_query_repeat_limit: int = 2
+    disable_preception_layer: bool = False
+    bootstrap_slots_file: str | None = None
+    bootstrap_context_file: str | None = None
+    ablation_variant: str = "baseline"
     bootstrap_model: str | None = None
     downstream_model: str | None = None
     embedding_model: str | None = None
@@ -161,9 +166,22 @@ class ClosedLoopCoordinator:
             round_index=0,
             note=f"prepared_image={prepared_input.path}",
         )
-        bootstrap = self._run_perception_bootstrap(image_path=prepared_input.path, input_text=input_text, run_dir=run_dir)
+        if bool(getattr(self.closed_loop_config, "disable_preception_layer", False)):
+            bootstrap = self._reuse_existing_bootstrap(run_dir=run_dir)
+        else:
+            bootstrap = self._run_perception_bootstrap(image_path=prepared_input.path, input_text=input_text, run_dir=run_dir)
         runtime_slots = load_slot_schemas(str(bootstrap["slots_file"]))
         runtime_meta = merge_meta(load_context_meta(str(bootstrap["context_file"])), meta)
+        runtime_meta.setdefault(
+            "ablation",
+            {
+                "variant": str(getattr(self.closed_loop_config, "ablation_variant", "baseline") or "baseline"),
+                "disable_preception_layer": bool(getattr(self.closed_loop_config, "disable_preception_layer", False)),
+                "disable_cot_layer": bool(getattr(self.slots_config, "disable_cot_layer", False)),
+                "disable_round_table_validation": bool(getattr(self.slots_config, "disable_round_table_validation", False)),
+                "disable_reflection_layer": bool(getattr(self.slots_config, "disable_reflection_layer", False)),
+            },
+        )
         runtime_meta.setdefault("downstream_updates", [])
         runtime_meta.setdefault("closed_loop_notes", [])
         runtime_meta.setdefault("dialogue_turns", [])
@@ -410,6 +428,7 @@ class ClosedLoopCoordinator:
         report_payload = {
             "run_dir": str(run_dir),
             "prepared_input": asdict(prepared_input),
+            "ablation": runtime_meta.get("ablation", {}),
             "bootstrap_slots_file": str(bootstrap["slots_file"]),
             "bootstrap_context_file": str(bootstrap["context_file"]),
             "final_slots_file": str(final_slots_file),
@@ -479,9 +498,23 @@ class ClosedLoopCoordinator:
     ) -> Any:
         perception_config_cls = _load_perception_config()
         base_config = perception_config_cls.from_env()
+        file_config = load_yaml_config(self.api_client.config_path or DEFAULT_CONFIG_PATH)
         base_url = self.api_client.base_url or base_config.base_url
         judge_model = judge_model_override or self.api_client.model or base_config.judge_model
         embedding_model = self.closed_loop_config.embedding_model or base_config.embedding_model
+        rag_endpoint = str(get_config_value(file_config, "rag", "endpoint", default=base_config.rag_endpoint)).strip()
+        rag_top_k = int(get_config_value(file_config, "rag", "top_k", default=base_config.rag_top_k) or base_config.rag_top_k)
+        rag_collection_name = str(
+            get_config_value(file_config, "rag", "collection_name", default=base_config.rag_collection_name)
+        ).strip()
+        rag_info_collection_name = str(
+            get_config_value(
+                file_config,
+                "rag",
+                "info_collection_name",
+                default=base_config.rag_info_collection_name or rag_collection_name,
+            )
+        ).strip()
         if base_url.rstrip("/") == "https://api.openai.com/v1" and embedding_model.startswith("baai/"):
             embedding_model = "text-embedding-3-small"
         return replace(
@@ -490,6 +523,10 @@ class ClosedLoopCoordinator:
             base_url=base_url,
             judge_model=judge_model,
             embedding_model=embedding_model,
+            rag_endpoint=rag_endpoint or base_config.rag_endpoint,
+            rag_top_k=max(1, rag_top_k),
+            rag_collection_name=rag_collection_name,
+            rag_info_collection_name=rag_info_collection_name,
             request_timeout=float(self.api_client.timeout or getattr(base_config, "request_timeout", 180.0)),
             context_path=context_path,
             rag_search_record_path=rag_search_record_path,
@@ -520,6 +557,28 @@ class ClosedLoopCoordinator:
         return {
             "slots_file": result.output_path,
             "context_file": result.context_path,
+        }
+
+    def _reuse_existing_bootstrap(self, *, run_dir: Path) -> dict[str, Path]:
+        slots_source = Path(str(getattr(self.closed_loop_config, "bootstrap_slots_file", "") or "")).expanduser()
+        context_source = Path(str(getattr(self.closed_loop_config, "bootstrap_context_file", "") or "")).expanduser()
+        if not slots_source.exists() or not slots_source.is_file():
+            raise FileNotFoundError(
+                "disable_preception_layer=true 时必须提供可读的 bootstrap_slots_file。"
+            )
+        if not context_source.exists() or not context_source.is_file():
+            raise FileNotFoundError(
+                "disable_preception_layer=true 时必须提供可读的 bootstrap_context_file。"
+            )
+        bootstrap_dir = run_dir / "perception_bootstrap"
+        bootstrap_dir.mkdir(parents=True, exist_ok=True)
+        slots_target = bootstrap_dir / "slots.jsonl"
+        context_target = bootstrap_dir / "context.md"
+        shutil.copyfile(slots_source, slots_target)
+        shutil.copyfile(context_source, context_target)
+        return {
+            "slots_file": slots_target,
+            "context_file": context_target,
         }
 
     def _build_downstream_runner(self, *, run_dir: Path, round_index: int) -> Any:
@@ -909,7 +968,7 @@ class ClosedLoopCoordinator:
                 "优先选择：与 query 直接对应、标题和 snippet 明显命中、来源更可靠、较少营销/聚合痕迹的页面。\n\n"
                 f"输入: {json.dumps(payload, ensure_ascii=False)}\n"
             ),
-            temperature=0.0,
+            temperature=0.7,
             image_path=None,
             model=self.slots_config.validation_model or self.slots_config.domain_model,
         )

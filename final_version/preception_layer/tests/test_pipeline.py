@@ -307,8 +307,13 @@ class FakeLLM:
 
 
 class FakeRag:
+    def __init__(self) -> None:
+        self.collection_names: list[str | None] = []
+
     def clone(self) -> "FakeRag":
-        return FakeRag()
+        cloned = FakeRag()
+        cloned.collection_names = self.collection_names
+        return cloned
 
     def search(
         self,
@@ -318,7 +323,9 @@ class FakeRag:
         query_image_filename: str | None,
         query_image_mime_type: str | None,
         top_k: int,
+        collection_name: str | None = None,
     ) -> list[RagDocument]:
+        self.collection_names.append(collection_name)
         assert query_image_bytes
         assert query_image_filename == "sample.png"
         assert query_image_mime_type == "image/png"
@@ -467,11 +474,13 @@ class MetadataMismatchLLM(FakeLLM):
 
 class MetadataFallbackRag(FakeRag):
     def __init__(self) -> None:
+        super().__init__()
         self.text_queries: list[str] = []
 
     def clone(self) -> "MetadataFallbackRag":
         cloned = MetadataFallbackRag()
         cloned.text_queries = self.text_queries
+        cloned.collection_names = self.collection_names
         return cloned
 
     def search(
@@ -482,7 +491,9 @@ class MetadataFallbackRag(FakeRag):
         query_image_filename: str | None,
         query_image_mime_type: str | None,
         top_k: int,
+        collection_name: str | None = None,
     ) -> list[RagDocument]:
+        self.collection_names.append(collection_name)
         if query_text is None:
             return [
                 RagDocument(
@@ -511,6 +522,7 @@ class MetadataFallbackRag(FakeRag):
             query_image_filename=query_image_filename,
             query_image_mime_type=query_image_mime_type,
             top_k=top_k,
+            collection_name=collection_name,
         )
 
 
@@ -997,6 +1009,28 @@ def test_pipeline_rechecks_metadata_spine_with_text_search_when_name_mismatches(
         assert any("作品主干核对器" in record["system_prompt"] for record in records)
 
 
+def test_pipeline_uses_info_collection_name_only_for_metadata_spine_searches() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        image_path = root / "sample.png"
+        Image.new("RGB", (32, 32), color="white").save(image_path, format="PNG")
+        rag = MetadataFallbackRag()
+        config = _build_config(root)
+        config.rag_info_collection_name = "image_blip"
+
+        pipeline = PerceptionPipeline(
+            config,
+            llm_client=MetadataMismatchLLM(),
+            rag_client=rag,
+            similarity_backend=FakeSimilarity(),
+        )
+
+        asyncio.run(pipeline.run(image_file=image_path, input_text="请分析图像主体。"))
+
+    assert rag.collection_names[:2] == ["image_blip", "image_blip"]
+    assert all(name is None for name in rag.collection_names[2:])
+
+
 def test_downstream_prompt_runner_preserves_existing_llm_chat_record() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
         root = Path(temp_dir)
@@ -1033,6 +1067,8 @@ def test_config_from_env_reads_defaults_and_overrides() -> None:
         {
             "OPENAI_API_KEY": "env-key",
             "PERCEPTION_RAG_TOP_K": "7",
+            "PERCEPTION_RAG_COLLECTION_NAME": "general_collection",
+            "PERCEPTION_RAG_INFO_COLLECTION_NAME": "image_blip",
             "PERCEPTION_DUPLICATE_THRESHOLD": "0.9",
             "PERCEPTION_MAX_IMAGE_PIXELS": "1003520",
         },
@@ -1043,6 +1079,8 @@ def test_config_from_env_reads_defaults_and_overrides() -> None:
     assert config.api_key == "env-key"
     assert config.base_url == "https://api.zjuqx.cn/v1"
     assert config.rag_top_k == 7
+    assert config.rag_collection_name == "general_collection"
+    assert config.rag_info_collection_name == "image_blip"
     assert config.duplicate_threshold == 0.9
     assert config.max_image_pixels == 1003520
     assert config.rag_search_record_path == Path("/Users/ken/MM/Pipeline/final_version/preception_layer/artifacts/rag_search_record.md")
@@ -1232,6 +1270,7 @@ def test_rag_uses_multipart_form_data_with_image_upload() -> None:
             query_image_filename="demo.png",
             query_image_mime_type="image/png",
             top_k=5,
+            collection_name="image_blip",
         )
 
     assert len(results) == 1
@@ -1241,6 +1280,8 @@ def test_rag_uses_multipart_form_data_with_image_upload() -> None:
     assert "multipart/form-data; boundary=" in content_type
     assert b'name="query_text"' in body
     assert b'name="top_k"' in body
+    assert b'name="collection_name"' in body
+    assert b"image_blip" in body
     assert b'name="query_image"; filename="demo.png"' in body
     assert b"Content-Type: image/png" in body
     assert b"fake-image-bytes" in body

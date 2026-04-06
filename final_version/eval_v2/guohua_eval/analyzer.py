@@ -590,7 +590,7 @@ class GuohuaEvalV2Analyzer:
     def _parse_slots_spec(self, slots_input: str) -> list[SlotDefinition]:
         response = self._client().chat.completions.create(
             model=self.judge_model,
-            temperature=0.1,
+            temperature=0.7,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": SLOT_PARSE_SYSTEM_PROMPT},
@@ -632,7 +632,7 @@ class GuohuaEvalV2Analyzer:
     def _extract_terms(self, context_name: str, indexed_sentences: Sequence[dict]) -> list[SemanticTerm]:
         response = self._client().chat.completions.create(
             model=self.judge_model,
-            temperature=0.1,
+            temperature=0.7,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": TERM_EXTRACTION_SYSTEM_PROMPT},
@@ -654,7 +654,7 @@ class GuohuaEvalV2Analyzer:
             return []
         response = self._client().chat.completions.create(
             model=self.judge_model,
-            temperature=0.1,
+            temperature=0.7,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": SLOT_MATCH_SYSTEM_PROMPT},
@@ -687,7 +687,7 @@ class GuohuaEvalV2Analyzer:
             ]
         response = self._client().chat.completions.create(
             model=self.judge_model,
-            temperature=0.1,
+            temperature=0.7,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": FIDELITY_SYSTEM_PROMPT},
@@ -798,7 +798,7 @@ class GuohuaEvalV2Analyzer:
     ) -> FinalJudgment:
         response = self._client().chat.completions.create(
             model=self.judge_model,
-            temperature=0.1,
+            temperature=0.7,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": FINAL_JUDGMENT_SYSTEM_PROMPT},

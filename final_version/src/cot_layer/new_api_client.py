@@ -156,7 +156,7 @@ class NewAPIClient:
         self,
         system_prompt: str,
         user_prompt: str,
-        temperature: float = 0.2,
+        temperature: float = 0.7,
         image_path: str | None = None,
         model: str | None = None,
     ) -> ChatResult:

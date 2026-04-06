@@ -614,6 +614,12 @@ class PerceptionPipeline:
     def _new_rag_client(self) -> RagClient:
         return self._rag_factory()
 
+    def _mainline_rag_collection_name(self) -> str | None:
+        collection_name = str(
+            self._config.rag_info_collection_name or self._config.rag_collection_name or ""
+        ).strip()
+        return collection_name or None
+
     async def run(
         self,
         *,
@@ -903,6 +909,7 @@ class PerceptionPipeline:
             query_image_filename=image_filename,
             query_image_mime_type=image_mime_type,
             top_k=max(5, int(self._config.rag_top_k)),
+            collection_name=self._mainline_rag_collection_name(),
         )
         top_documents = documents[:5]
         selected = self._select_metadata_spine_document(top_documents)
@@ -1025,6 +1032,7 @@ class PerceptionPipeline:
             query_image_filename=None,
             query_image_mime_type=None,
             top_k=max(8, int(self._config.rag_top_k)),
+            collection_name=self._mainline_rag_collection_name(),
         )
         candidates = documents
         if metadata_only:

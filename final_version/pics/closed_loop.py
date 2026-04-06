@@ -9,6 +9,9 @@ from time import perf_counter
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
+DEFAULT_BOOTSTRAP_SLOTS_FILE = ROOT_DIR / "preception_layer" / "artifacts" / "slots.jsonl"
+DEFAULT_BOOTSTRAP_CONTEXT_FILE = ROOT_DIR / "preception_layer" / "artifacts" / "context.md"
+
 from src.cot_layer import ClosedLoopConfig, ClosedLoopCoordinator, PipelineConfig, load_context_meta, merge_meta
 from src.cot_layer.config_loader import DEFAULT_CONFIG_PATH, get_config_value, load_yaml_config
 from src.cot_layer.new_api_client import NewAPIClient
@@ -33,6 +36,17 @@ def _config_bool(value: object, default: bool = True) -> bool:
         return True
     if text in {"0", "false", "no", "n", "off"}:
         return False
+    return default
+
+
+def _ablation_config_value(file_config: dict, *keys: str, default: object = None) -> object:
+    value = get_config_value(file_config, "ablation", *keys, default=None)
+    if value is not None:
+        return value
+    if keys and keys[-1] == "disable_preception_layer":
+        alias = get_config_value(file_config, "ablation", *keys[:-1], "disable_perception_layer", default=None)
+        if alias is not None:
+            return alias
     return default
 
 
@@ -270,6 +284,72 @@ def build_parser(file_config: dict) -> argparse.ArgumentParser:
             )
         ).strip(),
     )
+    parser.add_argument(
+        "--ablation-variant",
+        default=str(_ablation_config_value(file_config, "variant", default="baseline") or "baseline").strip() or "baseline",
+    )
+    parser.add_argument(
+        "--disable-round-table-validation",
+        action=argparse.BooleanOptionalAction,
+        default=_config_bool(
+            _ablation_config_value(file_config, "modules", "disable_round_table_validation", default=False),
+            False,
+        ),
+        help="关闭 round-table validation，但保留基础 cross-validation。",
+    )
+    parser.add_argument(
+        "--disable-reflection-layer",
+        action=argparse.BooleanOptionalAction,
+        default=_config_bool(
+            _ablation_config_value(file_config, "modules", "disable_reflection_layer", default=False),
+            False,
+        ),
+        help="关闭 reflection layer，不再做 follow-up 路由与 task planning。",
+    )
+    parser.add_argument(
+        "--disable-preception-layer",
+        action=argparse.BooleanOptionalAction,
+        default=_config_bool(
+            _ablation_config_value(file_config, "modules", "disable_preception_layer", default=False),
+            False,
+        ),
+        help="关闭 preception bootstrap，改为复用已有 slots/context。",
+    )
+    parser.add_argument(
+        "--disable-cot-layer",
+        action=argparse.BooleanOptionalAction,
+        default=_config_bool(
+            _ablation_config_value(file_config, "modules", "disable_cot_layer", default=False),
+            False,
+        ),
+        help="关闭 CoT layer，不再执行 slot 线程分析。",
+    )
+    parser.add_argument(
+        "--bootstrap-slots-file",
+        default=str(
+            _ablation_config_value(
+                file_config,
+                "bootstrap_fallback",
+                "slots_file",
+                default=str(DEFAULT_BOOTSTRAP_SLOTS_FILE),
+            )
+            or ""
+        ).strip(),
+        help="当关闭 preception layer 时复用的 slots.jsonl。",
+    )
+    parser.add_argument(
+        "--bootstrap-context-file",
+        default=str(
+            _ablation_config_value(
+                file_config,
+                "bootstrap_fallback",
+                "context_file",
+                default=str(DEFAULT_BOOTSTRAP_CONTEXT_FILE),
+            )
+            or ""
+        ).strip(),
+        help="当关闭 preception layer 时复用的 context.md。",
+    )
     parser.add_argument("--no-resize", action="store_true", help="禁用图像像素约束预处理")
     return parser
 
@@ -311,6 +391,10 @@ def main() -> None:
             rag_query_max_blocks=max(1, int(args.rag_query_max_blocks)),
             enable_rag_verification=bool(args.enable_rag_verification),
             retrieval_gain=bool(args.retrieval_gain),
+            disable_round_table_validation=bool(args.disable_round_table_validation),
+            disable_reflection_layer=bool(args.disable_reflection_layer),
+            disable_cot_layer=bool(args.disable_cot_layer),
+            ablation_variant=str(args.ablation_variant or "baseline").strip() or "baseline",
             enable_web_search=bool(args.enable_web_search),
             web_search_url=args.web_search_url or None,
             web_search_api_key=args.web_search_api_key or None,
@@ -339,6 +423,10 @@ def main() -> None:
             max_downstream_tasks_per_round=max(1, int(args.max_downstream_tasks_per_round)),
             stall_round_limit=max(1, int(args.stall_round_limit)),
             downstream_rag_query_repeat_limit=max(1, int(args.downstream_rag_query_repeat_limit)),
+            disable_preception_layer=bool(args.disable_preception_layer),
+            bootstrap_slots_file=args.bootstrap_slots_file or None,
+            bootstrap_context_file=args.bootstrap_context_file or None,
+            ablation_variant=str(args.ablation_variant or "baseline").strip() or "baseline",
             bootstrap_model=args.bootstrap_model or None,
             downstream_model=args.downstream_model or None,
             embedding_model=args.embedding_model or None,

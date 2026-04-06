@@ -9,6 +9,8 @@ DEFAULT_JUDGE_MODEL = "gemini-3pro"
 DEFAULT_EMBEDDING_MODEL = "baai/bge-m3"
 DEFAULT_RAG_ENDPOINT = "http://221.12.22.162:8888/test/8002/api/search"
 DEFAULT_RAG_TOP_K = 5
+DEFAULT_RAG_COLLECTION_NAME = ""
+DEFAULT_RAG_INFO_COLLECTION_NAME = ""
 DEFAULT_RAG_SIMILARITY_THRESHOLD = 0.35
 DEFAULT_DUPLICATE_THRESHOLD = 0.83
 DEFAULT_MAX_IMAGE_PIXELS = 1003520
@@ -36,6 +38,8 @@ class PipelineConfig:
     embedding_model: str = DEFAULT_EMBEDDING_MODEL
     rag_endpoint: str = DEFAULT_RAG_ENDPOINT
     rag_top_k: int = DEFAULT_RAG_TOP_K
+    rag_collection_name: str = DEFAULT_RAG_COLLECTION_NAME
+    rag_info_collection_name: str = DEFAULT_RAG_INFO_COLLECTION_NAME
     rag_similarity_threshold: float = DEFAULT_RAG_SIMILARITY_THRESHOLD
     duplicate_threshold: float = DEFAULT_DUPLICATE_THRESHOLD
     max_image_pixels: int = DEFAULT_MAX_IMAGE_PIXELS
@@ -64,6 +68,11 @@ class PipelineConfig:
             ),
             rag_endpoint=os.getenv("PERCEPTION_RAG_ENDPOINT", DEFAULT_RAG_ENDPOINT),
             rag_top_k=int(os.getenv("PERCEPTION_RAG_TOP_K", str(DEFAULT_RAG_TOP_K))),
+            rag_collection_name=os.getenv("PERCEPTION_RAG_COLLECTION_NAME", DEFAULT_RAG_COLLECTION_NAME),
+            rag_info_collection_name=os.getenv(
+                "PERCEPTION_RAG_INFO_COLLECTION_NAME",
+                DEFAULT_RAG_INFO_COLLECTION_NAME,
+            ),
             rag_similarity_threshold=float(
                 os.getenv("PERCEPTION_RAG_SCORE_THRESHOLD", str(DEFAULT_RAG_SIMILARITY_THRESHOLD))
             ),

@@ -117,6 +117,82 @@ class DynamicAgentPipeline:
         )
 
         executable_threads = [thread for thread in threads if thread.slot_name in {slot.slot_name for slot in slot_schemas}]
+        if bool(getattr(self.config, "disable_cot_layer", False)):
+            self._print_progress(
+                stage="round_end",
+                round_index=1,
+                max_rounds=1,
+                threads=threads,
+                slot_schemas=slot_schemas,
+                outputs=domain_outputs,
+                executable_threads=[],
+                routing=routing,
+                note="cot_layer_disabled",
+            )
+            dialogue_state.no_new_info_rounds = 1
+            dialogue_state.final_round_index = 1
+            dialogue_state.threads = [self._clone_thread(thread) for thread in threads]
+            dialogue_state.turns.append(
+                DialogueTurn(
+                    round_index=1,
+                    active_thread_ids=[],
+                    executed_thread_ids=[],
+                    spawned_thread_ids=[],
+                    answered_thread_ids=[],
+                    blocked_thread_ids=[],
+                    paused_thread_ids=[thread.thread_id for thread in threads],
+                    merged_thread_ids=[],
+                    routing_action="PAUSE_COT",
+                    notes=["CoT layer disabled by ablation config."],
+                    new_information_count=0,
+                    convergence_snapshot={"converged": False, "reason": "cot_layer_disabled"},
+                )
+            )
+            execution_log.append(
+                {
+                    "stage": "round_1",
+                    "routing": asdict(routing),
+                    "new_information_count": 0,
+                    "stage_timings": {"domain_cot_parallel_s": 0.0},
+                    "note": "cot_layer_disabled",
+                }
+            )
+            round_memory = self._build_round_memory(
+                domain_outputs,
+                validation,
+                dialogue_state,
+                threads,
+                prior_round_memories=meta.get("round_memories", []),
+            )
+            final_appreciation_prompt = build_final_prompt_fallback(
+                domain_outputs,
+                validation,
+                meta,
+                dialogue_state,
+            )
+            return PipelineResult(
+                image_path=image_path,
+                prepared_image=prepared_image,
+                slot_schemas=slot_schemas,
+                domain_outputs=domain_outputs,
+                cross_validation=validation,
+                routing=RoutingDecision(
+                    action="PAUSE_COT",
+                    rationale=["CoT layer disabled by ablation config."],
+                    paused_slots=[thread.slot_name for thread in threads],
+                    spawned_tasks=[],
+                    removed_questions=[],
+                    merged_duplicates=[],
+                    converged=False,
+                    convergence_reason="cot_layer_disabled",
+                ),
+                dialogue_state=dialogue_state,
+                cot_threads=threads,
+                round_memory=round_memory,
+                final_appreciation_prompt=final_appreciation_prompt,
+                api_logs=api_logs,
+                execution_log=execution_log,
+            )
         self._print_progress(
             stage="round_start",
             round_index=1,
@@ -217,35 +293,77 @@ class DynamicAgentPipeline:
         round_stage_started = perf_counter()
         validation = self._cross_validate(result.domain_outputs, result.slot_schemas, meta, result.api_logs)
         stage_timings["cross_validate_s"] = round(perf_counter() - round_stage_started, 4)
-        round_stage_started = perf_counter()
-        validation = self._review_validation_bundle(
-            result.slot_schemas,
-            result.domain_outputs,
-            validation,
-            meta,
-            result.api_logs,
-            use_llm=True,
-        )
-        stage_timings["validation_review_s"] = round(perf_counter() - round_stage_started, 4)
-        round_stage_started = perf_counter()
-        # CoT-only mode lets the outer coordinator own task queues, so follow-up planning
-        # should not be suppressed just because the current round already executed a thread.
-        candidate_tasks = self._plan_spawn_tasks(result.domain_outputs, validation, planning_threads, result.api_logs)
-        stage_timings["plan_spawn_tasks_s"] = round(perf_counter() - round_stage_started, 4)
-        round_stage_started = perf_counter()
-        candidate_tasks, duplicate_paused_thread_ids = self._suppress_redundant_tasks(candidate_tasks, planning_threads)
-        stage_timings["suppress_duplicate_tasks_s"] = round(perf_counter() - round_stage_started, 4)
-        round_stage_started = perf_counter()
-        convergence = self._check_convergence(
-            result.slot_schemas,
-            result.domain_outputs,
-            validation,
-            result.cot_threads,
-            result.dialogue_state,
-            candidate_tasks,
-        )
-        stage_timings["check_convergence_s"] = round(perf_counter() - round_stage_started, 4)
-        routing = self._build_routing(result.domain_outputs, validation, candidate_tasks, convergence)
+        if not bool(getattr(self.config, "disable_round_table_validation", False)):
+            round_stage_started = perf_counter()
+            validation = self._augment_round_table_review(
+                result.domain_outputs,
+                validation,
+                meta,
+                result.api_logs,
+            )
+            stage_timings["round_table_review_s"] = round(perf_counter() - round_stage_started, 4)
+        else:
+            stage_timings["round_table_review_s"] = 0.0
+
+        if bool(getattr(self.config, "disable_reflection_layer", False)):
+            validation.slot_lifecycle_reviews = []
+            validation.follow_up_task_reviews = []
+            candidate_tasks = []
+            duplicate_paused_thread_ids: list[str] = []
+            round_stage_started = perf_counter()
+            convergence = self._check_convergence(
+                result.slot_schemas,
+                result.domain_outputs,
+                validation,
+                result.cot_threads,
+                result.dialogue_state,
+                candidate_tasks,
+            )
+            stage_timings["check_convergence_s"] = round(perf_counter() - round_stage_started, 4)
+            routing = RoutingDecision(
+                action="PAUSE_COT",
+                rationale=["Reflection layer disabled by ablation config."],
+                paused_slots=self._stable_slots(result.domain_outputs, validation),
+                spawned_tasks=[],
+                removed_questions=validation.removed_questions,
+                merged_duplicates=validation.semantic_duplicates,
+                converged=convergence["converged"],
+                convergence_reason=convergence["reason"],
+                answered_slots=convergence["answered_slots"],
+            )
+            stage_timings["slot_lifecycle_review_s"] = 0.0
+            stage_timings["plan_spawn_tasks_s"] = 0.0
+            stage_timings["suppress_duplicate_tasks_s"] = 0.0
+        else:
+            round_stage_started = perf_counter()
+            validation = self._review_slot_lifecycle(
+                result.slot_schemas,
+                result.domain_outputs,
+                validation,
+                meta,
+                result.api_logs,
+                use_llm=True,
+            )
+            stage_timings["slot_lifecycle_review_s"] = round(perf_counter() - round_stage_started, 4)
+            round_stage_started = perf_counter()
+            # CoT-only mode lets the outer coordinator own task queues, so follow-up planning
+            # should not be suppressed just because the current round already executed a thread.
+            candidate_tasks = self._plan_spawn_tasks(result.domain_outputs, validation, planning_threads, result.api_logs)
+            stage_timings["plan_spawn_tasks_s"] = round(perf_counter() - round_stage_started, 4)
+            round_stage_started = perf_counter()
+            candidate_tasks, duplicate_paused_thread_ids = self._suppress_redundant_tasks(candidate_tasks, planning_threads)
+            stage_timings["suppress_duplicate_tasks_s"] = round(perf_counter() - round_stage_started, 4)
+            round_stage_started = perf_counter()
+            convergence = self._check_convergence(
+                result.slot_schemas,
+                result.domain_outputs,
+                validation,
+                result.cot_threads,
+                result.dialogue_state,
+                candidate_tasks,
+            )
+            stage_timings["check_convergence_s"] = round(perf_counter() - round_stage_started, 4)
+            routing = self._build_routing(result.domain_outputs, validation, candidate_tasks, convergence)
 
         result.cross_validation = validation
         result.routing = routing

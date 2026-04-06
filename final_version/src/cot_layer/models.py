@@ -29,8 +29,12 @@ class PipelineConfig:
     thread_attempt_limit: int = 2
     convergence_patience: int = 2
     resize_image: bool = True
-    domain_temperature: float = 0.2
-    validation_temperature: float = 0.1
+    domain_temperature: float = 0.7
+    validation_temperature: float = 0.7
+    disable_round_table_validation: bool = False
+    disable_reflection_layer: bool = False
+    disable_cot_layer: bool = False
+    ablation_variant: str = "baseline"
     domain_model: str | None = None
     validation_model: str | None = None
     final_prompt_model: str | None = None

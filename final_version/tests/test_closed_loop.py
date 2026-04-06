@@ -137,24 +137,45 @@ class ClosedLoopTests(unittest.TestCase):
             self.assertTrue(Path(prepared.path).exists())
 
     def test_build_perception_config_uses_closed_loop_api_settings(self) -> None:
-        coordinator = ClosedLoopCoordinator(
-            slots_config=PipelineConfig(output_dir="artifacts_test"),
-            api_client=NewAPIClient(
-                api_key="test-key",
-                base_url="https://api.openai.com/v1",
-                model="gpt-4.1-mini",
-                timeout=30,
-            ),
-        )
-        config = coordinator._build_perception_config(
-            context_path=Path("/tmp/context.md"),
-            rag_search_record_path=Path("/tmp/rag.md"),
-            llm_chat_record_path=Path("/tmp/chat.jsonl"),
-            output_path=Path("/tmp/slots.jsonl"),
-        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.yaml"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "rag:",
+                        '  endpoint: "http://example.com/rag"',
+                        "  top_k: 9",
+                        '  collection_name: "general_collection"',
+                        '  info_collection_name: "image_blip"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            coordinator = ClosedLoopCoordinator(
+                slots_config=PipelineConfig(output_dir="artifacts_test"),
+                api_client=NewAPIClient(
+                    api_key="test-key",
+                    base_url="https://api.openai.com/v1",
+                    model="gpt-4.1-mini",
+                    timeout=30,
+                    config_path=str(config_path),
+                ),
+            )
+            config = coordinator._build_perception_config(
+                context_path=Path("/tmp/context.md"),
+                rag_search_record_path=Path("/tmp/rag.md"),
+                llm_chat_record_path=Path("/tmp/chat.jsonl"),
+                output_path=Path("/tmp/slots.jsonl"),
+            )
+
         self.assertEqual("https://api.openai.com/v1", config.base_url)
         self.assertEqual("gpt-4.1-mini", config.judge_model)
         self.assertEqual("text-embedding-3-small", config.embedding_model)
+        self.assertEqual("http://example.com/rag", config.rag_endpoint)
+        self.assertEqual(9, config.rag_top_k)
+        self.assertEqual("general_collection", config.rag_collection_name)
+        self.assertEqual("image_blip", config.rag_info_collection_name)
 
     def test_build_downstream_payload_contains_reflection_context(self) -> None:
         task = SpawnTask(
@@ -238,6 +259,27 @@ class ClosedLoopTests(unittest.TestCase):
         self.assertTrue(any(item.startswith("retained_fact=") for item in payload["extra_constraints"]))
         self.assertTrue(any(item.startswith("downstream_rag_query=") for item in payload["extra_constraints"]))
         self.assertEqual(3, len(payload["rag_documents"]))
+
+    def test_reuse_existing_bootstrap_copies_files_for_ablation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            source_slots = tmp_path / "source_slots.jsonl"
+            source_context = tmp_path / "source_context.md"
+            source_slots.write_text('{"slot_name":"皴法"}\n', encoding="utf-8")
+            source_context.write_text("# context\n", encoding="utf-8")
+            coordinator = ClosedLoopCoordinator(
+                slots_config=PipelineConfig(output_dir="artifacts_test"),
+                closed_loop_config=self.coordinator.closed_loop_config.__class__(
+                    output_dir=str(tmp_path / "outputs"),
+                    disable_preception_layer=True,
+                    bootstrap_slots_file=str(source_slots),
+                    bootstrap_context_file=str(source_context),
+                ),
+            )
+            bootstrap = coordinator._reuse_existing_bootstrap(run_dir=tmp_path / "run")
+
+            self.assertEqual(source_slots.read_text(encoding="utf-8"), Path(bootstrap["slots_file"]).read_text(encoding="utf-8"))
+            self.assertEqual(source_context.read_text(encoding="utf-8"), Path(bootstrap["context_file"]).read_text(encoding="utf-8"))
 
     def test_run_task_retrieval_uses_web_search_for_web_mode(self) -> None:
         coordinator = ClosedLoopCoordinator(

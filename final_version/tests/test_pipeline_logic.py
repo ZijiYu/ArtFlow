@@ -198,6 +198,59 @@ class PipelineLogicTests(unittest.TestCase):
         tasks = self.pipeline._plan_spawn_tasks([output], validation, [])
         self.assertEqual([], tasks)
 
+    def test_finalize_result_pauses_when_reflection_layer_disabled(self) -> None:
+        pipeline = DynamicAgentPipeline(
+            config=PipelineConfig(disable_reflection_layer=True, max_threads_per_round=3, thread_attempt_limit=2),
+            api_client=FakeAPIClient(enabled=False),
+        )
+        output = DomainCoTRecord(
+            slot_name="皴法",
+            slot_term="雨点皴",
+            analysis_round=1,
+            controlled_vocabulary=["雨点皴"],
+            visual_anchoring=[EvidenceItem(observation="山石表面密集短点排列")],
+            domain_decoding=[],
+            cultural_mapping=[MappingItem(insight="更接近北方山石的厚重感")],
+            question_coverage=[QuestionCoverage(question="它如何表现北方山石？", answered=False)],
+            unresolved_points=["仍需补充"],
+            generated_questions=[],
+            statuses=[],
+            confidence=0.7,
+        )
+        result = PipelineResult(
+            image_path="/tmp/test.png",
+            prepared_image=PreparedImage(path="/tmp/test.png"),
+            slot_schemas=[self.slot_schema],
+            domain_outputs=[output],
+            cross_validation=CrossValidationResult(
+                issues=[],
+                semantic_duplicates=[],
+                missing_points=[],
+                rag_terms=[],
+                removed_questions=[],
+            ),
+            routing=RoutingDecision(
+                action="PAUSE_COT",
+                rationale=["pending"],
+                paused_slots=[],
+                spawned_tasks=[],
+                removed_questions=[],
+                merged_duplicates=[],
+            ),
+            dialogue_state=DialogueState(),
+            cot_threads=[],
+            round_memory={},
+            final_appreciation_prompt="",
+            api_logs=[],
+            execution_log=[],
+        )
+
+        finalized = pipeline.finalize_result(result, meta={})
+
+        self.assertEqual("PAUSE_COT", finalized.routing.action)
+        self.assertIn("Reflection layer disabled by ablation config.", finalized.routing.rationale)
+        self.assertEqual([], finalized.routing.spawned_tasks)
+
     def test_plan_spawn_tasks_routes_web_followup_to_downstream(self) -> None:
         output = DomainCoTRecord(
             slot_name="作者时代流派",
@@ -1662,7 +1715,8 @@ class PipelineLogicTests(unittest.TestCase):
         )
 
         pipeline._cross_validate = lambda *_args, **_kwargs: validation
-        pipeline._review_validation_bundle = lambda *_args, **_kwargs: validation
+        pipeline._augment_round_table_review = lambda *_args, **_kwargs: validation
+        pipeline._review_slot_lifecycle = lambda *_args, **_kwargs: validation
 
         finalized = pipeline.finalize_result(result, meta={"final_user_question": "它如何表现北方山石？"})
 
@@ -1750,7 +1804,8 @@ class PipelineLogicTests(unittest.TestCase):
         )
 
         pipeline._cross_validate = lambda *_args, **_kwargs: validation
-        pipeline._review_validation_bundle = lambda *_args, **_kwargs: validation
+        pipeline._augment_round_table_review = lambda *_args, **_kwargs: validation
+        pipeline._review_slot_lifecycle = lambda *_args, **_kwargs: validation
 
         finalized = pipeline.finalize_result(
             result,

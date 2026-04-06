@@ -45,6 +45,7 @@ class RagClient(Protocol):
         query_image_filename: str | None,
         query_image_mime_type: str | None,
         top_k: int,
+        collection_name: str | None = None,
     ) -> list[RagDocument]:
         ...
 
@@ -182,7 +183,7 @@ class OpenAIJsonClient:
             try:
                 response = self._client.chat.completions.create(
                     model=self._model,
-                    temperature=0.1,
+                    temperature=0.7,
                     response_format={"type": "json_object"},
                     messages=[
                         {"role": "system", "content": system_prompt},
@@ -264,12 +265,16 @@ class HttpRagClient:
         query_image_filename: str | None,
         query_image_mime_type: str | None,
         top_k: int,
+        collection_name: str | None = None,
     ) -> list[RagDocument]:
+        fields = {
+            "query_text": query_text or "",
+            "top_k": str(top_k),
+        }
+        if str(collection_name or "").strip():
+            fields["collection_name"] = str(collection_name).strip()
         body, content_type = _build_multipart_form_data(
-            fields={
-                "query_text": query_text or "",
-                "top_k": str(top_k),
-            },
+            fields=fields,
             file_field_name="query_image",
             file_bytes=query_image_bytes,
             file_name=query_image_filename,
