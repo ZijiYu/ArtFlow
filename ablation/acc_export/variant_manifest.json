@@ -1,0 +1,42 @@
+[
+  {
+    "variant": "baseline",
+    "count": 20,
+    "ok": 20,
+    "acc_input_dir": "/Users/ken/MM/Pipeline/ablation/acc_export/baseline/final_prompts",
+    "index_jsonl": "/Users/ken/MM/Pipeline/ablation/acc_export/baseline/index.jsonl",
+    "index_csv": "/Users/ken/MM/Pipeline/ablation/acc_export/baseline/index.csv"
+  },
+  {
+    "variant": "step_01_no_round_table_validation",
+    "count": 20,
+    "ok": 20,
+    "acc_input_dir": "/Users/ken/MM/Pipeline/ablation/acc_export/step_01_no_round_table_validation/final_prompts",
+    "index_jsonl": "/Users/ken/MM/Pipeline/ablation/acc_export/step_01_no_round_table_validation/index.jsonl",
+    "index_csv": "/Users/ken/MM/Pipeline/ablation/acc_export/step_01_no_round_table_validation/index.csv"
+  },
+  {
+    "variant": "step_02_no_round_table_validation_no_reflection_layer",
+    "count": 20,
+    "ok": 20,
+    "acc_input_dir": "/Users/ken/MM/Pipeline/ablation/acc_export/step_02_no_round_table_validation_no_reflection_layer/final_prompts",
+    "index_jsonl": "/Users/ken/MM/Pipeline/ablation/acc_export/step_02_no_round_table_validation_no_reflection_layer/index.jsonl",
+    "index_csv": "/Users/ken/MM/Pipeline/ablation/acc_export/step_02_no_round_table_validation_no_reflection_layer/index.csv"
+  },
+  {
+    "variant": "step_03_no_round_table_validation_no_reflection_layer_no_preception_layer",
+    "count": 20,
+    "ok": 20,
+    "acc_input_dir": "/Users/ken/MM/Pipeline/ablation/acc_export/step_03_no_round_table_validation_no_reflection_layer_no_preception_layer/final_prompts",
+    "index_jsonl": "/Users/ken/MM/Pipeline/ablation/acc_export/step_03_no_round_table_validation_no_reflection_layer_no_preception_layer/index.jsonl",
+    "index_csv": "/Users/ken/MM/Pipeline/ablation/acc_export/step_03_no_round_table_validation_no_reflection_layer_no_preception_layer/index.csv"
+  },
+  {
+    "variant": "step_04_no_round_table_validation_no_reflection_layer_no_preception_layer_no_cot_layer",
+    "count": 20,
+    "ok": 20,
+    "acc_input_dir": "/Users/ken/MM/Pipeline/ablation/acc_export/step_04_no_round_table_validation_no_reflection_layer_no_preception_layer_no_cot_layer/final_prompts",
+    "index_jsonl": "/Users/ken/MM/Pipeline/ablation/acc_export/step_04_no_round_table_validation_no_reflection_layer_no_preception_layer_no_cot_layer/index.jsonl",
+    "index_csv": "/Users/ken/MM/Pipeline/ablation/acc_export/step_04_no_round_table_validation_no_reflection_layer_no_preception_layer_no_cot_layer/index.csv"
+  }
+]

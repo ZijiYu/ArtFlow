@@ -1,0 +1,11 @@
+{
+  "run_index": "/Users/ken/MM/Pipeline/ablation/ablation_run_index.jsonl",
+  "output_root": "/Users/ken/MM/Pipeline/ablation/acc_export",
+  "total_rows": 100,
+  "status_counts": {
+    "ok": 100
+  },
+  "index_jsonl": "/Users/ken/MM/Pipeline/ablation/acc_export/ablation_acc_index.jsonl",
+  "index_csv": "/Users/ken/MM/Pipeline/ablation/acc_export/ablation_acc_index.csv",
+  "variant_manifest": "/Users/ken/MM/Pipeline/ablation/acc_export/variant_manifest.json"
+}

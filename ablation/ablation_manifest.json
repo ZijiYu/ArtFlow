@@ -1,0 +1,56 @@
+{
+  "base_config": "/Users/ken/MM/Pipeline/final_version/config.yaml",
+  "output_root": "/Users/ken/MM/Pipeline/ablation",
+  "strategy": "cumulative",
+  "variants": [
+    {
+      "name": "baseline",
+      "disabled_modules": [],
+      "config_path": "/Users/ken/MM/Pipeline/ablation/configs/baseline.yaml",
+      "output_dir": "/Users/ken/MM/Pipeline/ablation/baseline",
+      "command": "/opt/anaconda3/bin/python /Users/ken/MM/Pipeline/final_version/pics/closed_loop.py --config /Users/ken/MM/Pipeline/ablation/configs/baseline.yaml"
+    },
+    {
+      "name": "step_01_no_round_table_validation",
+      "disabled_modules": [
+        "round_table_validation"
+      ],
+      "config_path": "/Users/ken/MM/Pipeline/ablation/configs/step_01_no_round_table_validation.yaml",
+      "output_dir": "/Users/ken/MM/Pipeline/ablation/step_01_no_round_table_validation",
+      "command": "/opt/anaconda3/bin/python /Users/ken/MM/Pipeline/final_version/pics/closed_loop.py --config /Users/ken/MM/Pipeline/ablation/configs/step_01_no_round_table_validation.yaml"
+    },
+    {
+      "name": "step_02_no_round_table_validation_no_reflection_layer",
+      "disabled_modules": [
+        "round_table_validation",
+        "reflection_layer"
+      ],
+      "config_path": "/Users/ken/MM/Pipeline/ablation/configs/step_02_no_round_table_validation_no_reflection_layer.yaml",
+      "output_dir": "/Users/ken/MM/Pipeline/ablation/step_02_no_round_table_validation_no_reflection_layer",
+      "command": "/opt/anaconda3/bin/python /Users/ken/MM/Pipeline/final_version/pics/closed_loop.py --config /Users/ken/MM/Pipeline/ablation/configs/step_02_no_round_table_validation_no_reflection_layer.yaml"
+    },
+    {
+      "name": "step_03_no_round_table_validation_no_reflection_layer_no_preception_layer",
+      "disabled_modules": [
+        "round_table_validation",
+        "reflection_layer",
+        "preception_layer"
+      ],
+      "config_path": "/Users/ken/MM/Pipeline/ablation/configs/step_03_no_round_table_validation_no_reflection_layer_no_preception_layer.yaml",
+      "output_dir": "/Users/ken/MM/Pipeline/ablation/step_03_no_round_table_validation_no_reflection_layer_no_preception_layer",
+      "command": "/opt/anaconda3/bin/python /Users/ken/MM/Pipeline/final_version/pics/closed_loop.py --config /Users/ken/MM/Pipeline/ablation/configs/step_03_no_round_table_validation_no_reflection_layer_no_preception_layer.yaml"
+    },
+    {
+      "name": "step_04_no_round_table_validation_no_reflection_layer_no_preception_layer_no_cot_layer",
+      "disabled_modules": [
+        "round_table_validation",
+        "reflection_layer",
+        "preception_layer",
+        "cot_layer"
+      ],
+      "config_path": "/Users/ken/MM/Pipeline/ablation/configs/step_04_no_round_table_validation_no_reflection_layer_no_preception_layer_no_cot_layer.yaml",
+      "output_dir": "/Users/ken/MM/Pipeline/ablation/step_04_no_round_table_validation_no_reflection_layer_no_preception_layer_no_cot_layer",
+      "command": "/opt/anaconda3/bin/python /Users/ken/MM/Pipeline/final_version/pics/closed_loop.py --config /Users/ken/MM/Pipeline/ablation/configs/step_04_no_round_table_validation_no_reflection_layer_no_preception_layer_no_cot_layer.yaml"
+    }
+  ]
+}

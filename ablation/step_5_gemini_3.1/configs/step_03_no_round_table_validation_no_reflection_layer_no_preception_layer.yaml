@@ -1,0 +1,81 @@
+runtime:
+  mode: closed_loop
+  output_dir: /Users/ken/MM/Pipeline/ablation/step_5_gemini_3.1/step_03_no_round_table_validation_no_reflection_layer_no_preception_layer
+api:
+  key: null
+  key_file: /Users/ken/MM/Pipeline/test/new_api/api.txt
+  key_line: 1
+  key_env: OPENAI_API_KEY
+  base_url: https://api.zjuqx.cn/v1
+  model: google/gemini-3.1-pro-preview
+  timeout: 180
+image:
+  path: /Users/ken/MM/image/66af7d40-4070-11ed-9adc-c934f75048ef.jpg
+  initial_question: 请对这幅国画做严谨分析。
+  final_question: 请对这幅国画做严谨分析。
+  allow_remote_url: true
+  local_input_mode: data_url
+models:
+  default: google/gemini-3.1-pro-preview
+  perception_bootstrap: google/gemini-3.1-pro-preview
+  perception_downstream: google/gemini-3.1-pro-preview
+  validation: google/gemini-3.1-pro-preview
+  final_prompt: google/gemini-3.1-pro-preview
+  final_answer: google/gemini-3.1-pro-preview
+  embedding: text-embedding-3-small
+rag:
+  endpoint: http://221.12.22.162:8888/test/8002/api/search
+  top_k: 5
+  collection_name: ''
+  info_collection_name: image_blip
+slots_v2:
+  slots_file: /Users/ken/MM/Pipeline/final_version/preception_layer/artifacts/slots.jsonl
+  max_pixel: 1003520
+  rag_query_max_blocks: 1
+  enable_rag_verification: true
+  retrieval_gain: false
+  max_spawn_rounds: 1
+  max_dialogue_rounds: 3
+  max_threads_per_round: 8
+  thread_attempt_limit: 1
+  convergence_patience: 1
+  concurrent_workers: 4
+  resize_image: true
+  output_dir: /Users/ken/MM/Pipeline/final_version/artifacts/manual_test
+web_search:
+  enabled: false
+  provider: serper
+  url: https://google.serper.dev/search
+  api_key: ''
+  api_key_file: /Users/ken/MM/Pipeline/test/联网搜索/api.txt
+  api_key_line: 1
+  timeout: 20
+  search_top_k: 5
+  fetch_top_n: 2
+  use_llm_rerank: true
+  skip_llm_if_confident: true
+  fallback_on_empty_rag: true
+closed_loop:
+  output_dir: /Users/ken/MM/Pipeline/ablation/step_5_gemini_3.1/step_03_no_round_table_validation_no_reflection_layer_no_preception_layer
+  max_closed_loop_rounds: 3
+  max_downstream_tasks_per_round: 2
+  stall_round_limit: 2
+  downstream_rag_query_repeat_limit: 2
+ablation:
+  enabled: true
+  variant: step_03_no_round_table_validation_no_reflection_layer_no_preception_layer
+  strategy: cumulative
+  output_root: /Users/ken/MM/Pipeline/ablation/step_5_gemini_3.1
+  order:
+  - round_table_validation
+  - reflection_layer
+  - preception_layer
+  - cot_layer
+  modules:
+    disable_round_table_validation: true
+    disable_reflection_layer: true
+    disable_preception_layer: true
+    disable_cot_layer: false
+  bootstrap_fallback:
+    slots_file: /Users/ken/MM/Pipeline/final_version/preception_layer/artifacts/slots.jsonl
+    context_file: /Users/ken/MM/Pipeline/final_version/preception_layer/artifacts/context.md

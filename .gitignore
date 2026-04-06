@@ -1,0 +1,39 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+*/.venv/
+
+# MacOS
+.DS_Store
+*/.DS_Store
+
+# Secrets
+api.txt
+**/api.txt
+
+# Generated artifacts
+final_version/artifacts_closed_loop/manual_test/
+final_version/eval_v2/artifacts/
+cluster_match/artifacts/
+ablation/**/batch_runs/
+ablation/**/batch_runs.zip
+ablation/**/_uv_smoke_test/
+ablation/**/_uv_smoke_test_prefixed/
+ablation/**/api_diag_*/
+ablation/**/final_prompts/
+ablation/**/raw/
+ablation/**/reports/
+ablation/**/runtime_state/
+ablation/**/stdout.log
+ablation/**/stderr.log
+ablation/**/batch_driver.log
+ablation/**/model_replacement_baseline20.log
+ablation/**/*.pid
+ablation/_tmp_single_acc_index.jsonl
